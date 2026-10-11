@@ -18,9 +18,9 @@ npm run build
 npm run preview
 ```
 
-The production build is a static site in `dist/`. Leaflet loads OpenStreetMap raster tiles over the network and shows the required attribution. HDB footprints and the region/HDB index are bundled as static assets; local outlines remain available if the tile service is unavailable.
+The production build is a static site in `dist/`. Leaflet loads OpenStreetMap raster tiles over the network and shows the required attribution. Under-construction footprints and the regional HDB index are bundled as static assets; local map data remains available if the tile service is unavailable.
 
-Drag to pan, scroll or pinch to zoom, and use the zoom buttons. The initial map shows all five URA regions with softly tinted fills. Click a region on the map or choose it in the region panel to highlight it and load its existing HDB footprints; click a footprint or a row in the searchable block list to open its details. Use **Whole map** to return to the Singapore overview or **Select region** to switch regions. **Show all HDB footprints** fits the current overview or active region. Choose an under-construction block from the header dropdown or click one of its footprints to inspect its source identifiers. Region membership is derived from each valid existing-HDB footprint's representative point; the region boundaries are indicative planning boundaries. The source contains building blocks, not named BTO projects or project boundaries. This MVP is a flat 2D map with no 3D extrusion or building-height claim.
+Drag to pan, scroll or pinch to zoom, and use the zoom buttons. The initial map shows all five URA regions with softly tinted fills. Click a region on the map or choose it in the region picker to show selectable pins for its HDB blocks. Select a pin or a row in the block list to open focused block details. The sidebar shows source-backed completion year, maximum floor level, dwelling-unit totals and mix, property-use flags, and historical resale prices where matched; metre height is unavailable in the supplied sources. Use **Whole map** to return to the Singapore overview or **Select region** to switch regions. The fit control returns to the current regional view or overview. Choose an under-construction block from the header dropdown or click one of its footprints to inspect its source identifiers. Region membership is derived from each valid existing-HDB footprint's representative point; the region boundaries are indicative planning boundaries. The source contains building blocks, not named BTO project boundaries. This MVP is a flat 2D map with no 3D extrusion.
 
 ## Prepare the HDB demo data
 
@@ -48,21 +48,21 @@ Prepare the region and existing-HDB index with:
 .venv/bin/python scripts/prepare_region_hdb_index.py
 ```
 
-It reads `data/raw/HDBExistingBuilding.geojson` and `data/raw/MasterPlan2025RegionBoundaryNoSea.geojson`, and writes the browser index to `public/data/regions/hdb-by-region.json` plus one lazy-loaded footprint GeoJSON per region under `public/data/regions/buildings/`.
+It reads HDB Existing Building, HDB Property Information, and URA Master Plan 2025 region-boundary sources under `data/raw/`, and writes enriched block records and regional outlines to `public/data/regions/hdb-by-region.json`.
 
 ## Project structure
 
 - `src/app/` — application shell and responsive layout.
-- `src/features/map/` — Leaflet lifecycle, raster basemap, HDB polygon overlay and selection.
+- `src/features/map/` — Leaflet lifecycle, regional overview, HDB block pins and selection.
 - `src/features/buildings/` — building metadata types and details panel.
 - `src/features/regions/` — runtime validation and searchable HDB-by-region browser.
 - `src/features/projects/` — HDB block selector (source blocks are not named projects).
-- `src/features/prices/` — future analytics placeholder.
+- `src/features/prices/` — historical resale-price data and block-level summaries.
 - `src/features/walkthrough/` — future walkthrough placeholder.
 - `scripts/` — offline source inspection and demo GeoJSON preparation.
 - `docs/` — product requirements, architecture, source notes and roadmap.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The current MVP is limited to the 2D map, sourced existing-HDB outlines, selection and static deployment setup.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The current MVP includes the 2D region-to-block map flow, source-enriched HDB details, resale history and static deployment setup.
 
 ## GitHub Pages
 
@@ -72,4 +72,4 @@ Static assets in `public/` must be referenced with `import.meta.env.BASE_URL` so
 
 ## Scope and data
 
-The current MVP covers a navigable 2D basemap, selectable under-construction HDB footprints, 2025 planning-region boundaries, and searchable existing HDB block lists. There is no named-project grouping, resale analytics, backend, database, 3D rendering or official height data. Raw inputs under `data/` remain ignored by Git; derived assets under `public/data/` are served to the browser.
+The current MVP covers a navigable 2D basemap, selectable under-construction HDB footprints, 2025 planning-region boundaries, HDB block pins, joined property information and historical resale analytics. It has no named-project grouping, backend, database, 3D rendering or verified metre-height data. Raw inputs under `data/` remain ignored by Git; derived assets under `public/data/` are served to the browser.

@@ -251,6 +251,12 @@ button {
   max-height: 56%;
 }
 
+.region-browser.has-selected-building {
+  flex: none;
+  min-height: 0;
+  max-height: none;
+}
+
 .region-browser-list {
   scrollbar-color: #dce3dc transparent;
   scrollbar-width: thin;

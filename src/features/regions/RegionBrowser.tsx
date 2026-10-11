@@ -30,6 +30,7 @@ export function RegionBrowser({
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
   const selectedRegion = regions.find((region) => region.code === selectedRegionCode) ?? null
+  const selectedBuilding = selectedRegion?.buildings.find((building) => building.buildingId === selectedBuildingId) ?? null
   useEffect(() => {
     setQuery('')
     setPage(0)
@@ -47,7 +48,19 @@ export function RegionBrowser({
   const visibleBuildings = filteredBuildings.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   return (
-    <section className="region-browser flex min-h-0 flex-col border-b border-[#e7eae5] bg-white" aria-labelledby="region-browser-title">
+    <section className={`region-browser flex min-h-0 flex-col border-b border-[#e7eae5] bg-white ${selectedBuilding ? 'has-selected-building' : ''}`} aria-label={selectedBuilding ? `Selected block ${selectedBuilding.blockNumber} navigation` : undefined} aria-labelledby={selectedBuilding ? undefined : 'region-browser-title'}>
+      {selectedRegion && status === 'ready' && selectedBuilding ? (
+        <div className="shrink-0 px-5 py-3">
+          <button
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[#e2e7e1] bg-white px-3 text-[11px] font-medium text-[#526b59] transition hover:bg-[#f5f7f3] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3f6655]"
+            type="button"
+            onClick={() => onRegionSelected(selectedRegion.code)}
+          >
+            <ChevronLeft size={14} aria-hidden="true" /> Back to {regionLabel(selectedRegion)} blocks
+          </button>
+        </div>
+      ) : (
+        <>
       <div className="region-browser-heading shrink-0 px-5 pb-3 pt-5">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -85,7 +98,7 @@ export function RegionBrowser({
             </label>
             {selectedRegion && (
               <>
-                <label className="mt-2.5 block text-[10px] font-medium text-[#77827b]">
+                {!selectedBuilding && <label className="mt-2.5 block text-[10px] font-medium text-[#77827b]">
                   Find by block or postal code
                   <input
                     className="mt-1.5 h-9 w-full rounded-lg border border-[#e2e7e1] bg-white px-3 text-[11px] outline-none placeholder:text-[#a0a8a3] focus:border-[#91a58f] focus:ring-2 focus:ring-[#8da68d]/15"
@@ -98,7 +111,7 @@ export function RegionBrowser({
                     placeholder="e.g. 123 or 123456"
                     aria-label={`Filter HDB blocks in ${regionLabel(selectedRegion)}`}
                   />
-                </label>
+                </label>}
                 <p className="mt-2 text-[10px] text-[#89928d]" aria-live="polite">
                   {filteredBuildings.length.toLocaleString()} of {selectedRegion.buildingCount.toLocaleString()} HDB footprint records
                 </p>
@@ -112,7 +125,7 @@ export function RegionBrowser({
         )}
       </div>
 
-      {selectedRegion && status === 'ready' && (
+      {selectedRegion && status === 'ready' && !selectedBuilding && (
         <>
           <div className="region-browser-list min-h-0 flex-1 overflow-y-auto border-t border-[#edf0eb]" aria-label={`HDB blocks in ${regionLabel(selectedRegion)}`}>
             {visibleBuildings.length ? visibleBuildings.map((building) => {
@@ -153,6 +166,8 @@ export function RegionBrowser({
             Sources: <a className="underline underline-offset-2" href="https://data.gov.sg/datasets/d_16b157c52ed637edd6ba1232e026258d/view" target="_blank" rel="noreferrer">HDB Existing Building</a>
             {' · '}<a className="underline underline-offset-2" href="https://data.gov.sg/datasets/d_4ce0038f7ac689652350bb91b7fb92ed/view" target="_blank" rel="noreferrer">URA Master Plan 2025 Region Boundary</a>
           </p>
+        </>
+      )}
         </>
       )}
     </section>

@@ -4,7 +4,6 @@ import * as L from 'leaflet'
 import { BuildingLayer } from './BuildingLayer'
 import type { BuildingLayerState, BuildingMetadata } from '../buildings/types'
 import type { RegionRecord, RegionalHdbRecord } from '../regions/types'
-import { loadRegionFootprints } from '../regions/data'
 
 const INITIAL_CENTER: L.LatLngExpression = [1.3521, 103.8198]
 const INITIAL_ZOOM = 12
@@ -16,12 +15,8 @@ const REGION_COLORS: Record<string, string> = {
   NER: '#c5acd0',
   WR: '#d79d8a',
 }
-const REGIONAL_FOOTPRINT_STYLE: L.PathOptions = {
-  color: '#476652', weight: 0.72, opacity: 0.88, fillColor: '#9bb79a', fillOpacity: 0.56,
-}
-const SELECTED_REGIONAL_FOOTPRINT_STYLE: L.PathOptions = {
-  color: '#8a4937', weight: 2.2, opacity: 1, fillColor: '#d68162', fillOpacity: 0.82,
-}
+const HDB_PIN_STYLE = { radius: 3.5, color: '#ffffff', weight: 1, fillColor: '#547b61', fillOpacity: 0.9 }
+const SELECTED_HDB_PIN_STYLE = { radius: 7, color: '#ffffff', weight: 2, fillColor: '#8a4937', fillOpacity: 1 }
 
 type MapViewProps = {
   buildingLayerState: BuildingLayerState
@@ -52,11 +47,10 @@ export function MapView({
   const mapRef = useRef<L.Map | null>(null)
   const buildingLayerRef = useRef<BuildingLayer | null>(null)
   const regionLayerRef = useRef<L.GeoJSON | null>(null)
-  const regionalFootprintsLayerRef = useRef<L.GeoJSON | null>(null)
-  const regionalFootprintByIdRef = useRef(new Map<string, L.Path>())
-  const selectedRegionalFootprintRef = useRef<L.Path | null>(null)
+  const regionalHdbPinsLayerRef = useRef<L.LayerGroup | null>(null)
+  const regionalHdbPinByIdRef = useRef(new Map<string, L.CircleMarker>())
+  const selectedRegionalHdbPinRef = useRef<L.CircleMarker | null>(null)
   const selectedRegionLayerRef = useRef<L.Layer | null>(null)
-  const regionalHdbMarkerRef = useRef<L.CircleMarker | null>(null)
   const layerStateCallbackRef = useRef(onBuildingLayerState)
   const selectionCallbackRef = useRef(onBuildingSelected)
   const buildingsCallbackRef = useRef(onBuildingsLoaded)
@@ -141,6 +135,12 @@ export function MapView({
     if (!map || regions.length === 0) return
 
     regionLayerRef.current?.remove()
+    if (selectedRegionCode) {
+      regionLayerRef.current?.remove()
+      regionLayerRef.current = null
+      selectedRegionLayerRef.current = null
+      return
+    }
     const featureCollection: GeoJSON.FeatureCollection = {
       type: 'FeatureCollection',
       features: regions.map((region) => ({
@@ -191,39 +191,20 @@ export function MapView({
   }, [regions, selectedRegionCode])
 
   useEffect(() => {
+    if (!selectedRegionCode) return
     const map = mapRef.current
-    const layer = regionLayerRef.current
-    if (!map || !layer) return
-    const selectedBounds: { current: L.LatLngBounds | null } = { current: null }
-    layer.eachLayer((regionLayer) => {
-      if (!(regionLayer instanceof L.Path)) return
-      const feature = (regionLayer as L.Path & { feature?: GeoJSON.Feature }).feature
-      const code = feature?.properties?.region_code
-      const selected = code === selectedRegionCode
-      regionLayer.setStyle({
-        color: selected ? '#8a4937' : '#596f5e',
-        weight: selected ? 2.6 : 1.5,
-        opacity: selected ? 0.96 : 0.68,
-        fill: true,
-        fillColor: REGION_COLORS[code ?? ''] ?? '#a8c0ad',
-        fillOpacity: selected ? 0.32 : 0.2,
-        dashArray: undefined,
-      })
-      if (selected && 'getBounds' in regionLayer && typeof regionLayer.getBounds === 'function') {
-        selectedBounds.current = regionLayer.getBounds()
-      }
-    })
-    if (selectedRegionCode && selectedBounds.current?.isValid()) {
-      map.fitBounds(selectedBounds.current.pad(0.06), { maxZoom: 12, animate: true, duration: 0.45 })
-    }
+    const region = regions.find((candidate) => candidate.code === selectedRegionCode)
+    if (!map || !region) return
+    const bounds = L.geoJSON(region.geometry).getBounds()
+    if (bounds.isValid()) map.fitBounds(bounds.pad(0.06), { maxZoom: 12, animate: true, duration: 0.45 })
   }, [selectedRegionCode, regions])
 
   useEffect(() => {
     const map = mapRef.current
-    regionalFootprintsLayerRef.current?.remove()
-    regionalFootprintsLayerRef.current = null
-    regionalFootprintByIdRef.current.clear()
-    selectedRegionalFootprintRef.current = null
+    regionalHdbPinsLayerRef.current?.remove()
+    regionalHdbPinsLayerRef.current = null
+    regionalHdbPinByIdRef.current.clear()
+    selectedRegionalHdbPinRef.current = null
     if (!selectedRegionCode || !map) {
       setFootprintsStatus('idle')
       setFootprintsMessage('')
@@ -231,83 +212,50 @@ export function MapView({
     }
     const region = regions.find((candidate) => candidate.code === selectedRegionCode)
     if (!region) return
-    const controller = new AbortController()
     setFootprintsStatus('loading')
-    setFootprintsMessage(`Loading ${region.buildingCount.toLocaleString()} HDB footprints in ${region.name}…`)
-    void loadRegionFootprints(region, controller.signal).then((collection) => {
-      if (controller.signal.aborted || !mapRef.current) return
-      const buildingsById = new Map(region.buildings.map((building) => [building.buildingId, building]))
-      const layer = L.geoJSON(collection, {
-        style: () => ({ ...REGIONAL_FOOTPRINT_STYLE }),
-        onEachFeature: (feature, featureLayer) => {
-          if (!(featureLayer instanceof L.Path) || typeof feature.id !== 'string') return
-          const id = feature.id
-          regionalFootprintByIdRef.current.set(id, featureLayer)
-          featureLayer.options.bubblingMouseEvents = false
-          const building = buildingsById.get(id)
-          if (building) {
-            featureLayer.bindTooltip(`Block ${building.blockNumber} · ${building.postalCode}`, { direction: 'auto', sticky: true })
-            featureLayer.on('click', (event: L.LeafletMouseEvent) => {
-              L.DomEvent.stopPropagation(event)
-              regionalHdbSelectionCallbackRef.current(region.code, building)
-            })
-          }
-        },
-      }).addTo(map)
-      regionalFootprintsLayerRef.current = layer
-      const selectedFootprint = selectedRegionalHdb
-        ? regionalFootprintByIdRef.current.get(selectedRegionalHdb.buildingId) ?? null
-        : null
-      selectedRegionalFootprintRef.current = selectedFootprint
-      selectedFootprint?.setStyle(SELECTED_REGIONAL_FOOTPRINT_STYLE)
-      setFootprintsStatus('ready')
-      setFootprintsMessage(`${collection.features.length.toLocaleString()} HDB footprints shown in ${region.name}.`)
-    }).catch((error: unknown) => {
-      if (controller.signal.aborted) return
-      setFootprintsStatus('error')
-      setFootprintsMessage(error instanceof Error ? error.message : 'Could not load this region’s HDB footprints.')
-    })
+    setFootprintsMessage(`Showing ${region.buildingCount.toLocaleString()} HDB blocks in ${region.name}…`)
+    if (!mapRef.current) return
+    const layer = L.layerGroup()
+    for (const building of region.buildings) {
+      const selected = building.buildingId === selectedRegionalHdb?.buildingId
+      const pin = L.circleMarker([building.latitude, building.longitude], selected ? SELECTED_HDB_PIN_STYLE : HDB_PIN_STYLE)
+      pin.bindTooltip(`Block ${building.blockNumber} · ${building.postalCode}`, { direction: 'top', sticky: true })
+      pin.on('click', (event: L.LeafletMouseEvent) => {
+        L.DomEvent.stopPropagation(event)
+        regionalHdbSelectionCallbackRef.current(region.code, building)
+      })
+      regionalHdbPinByIdRef.current.set(building.buildingId, pin)
+      pin.addTo(layer)
+    }
+    layer.addTo(map)
+    regionalHdbPinsLayerRef.current = layer
+    if (selectedRegionalHdb) {
+      selectedRegionalHdbPinRef.current = regionalHdbPinByIdRef.current.get(selectedRegionalHdb.buildingId) ?? null
+    }
+    setFootprintsStatus('ready')
+    setFootprintsMessage(`${region.buildingCount.toLocaleString()} HDB block pins shown in ${region.name}.`)
     return () => {
-      controller.abort()
-      regionalFootprintsLayerRef.current?.remove()
-      regionalFootprintsLayerRef.current = null
-      regionalFootprintByIdRef.current.clear()
-      selectedRegionalFootprintRef.current = null
+      regionalHdbPinsLayerRef.current?.remove()
+      regionalHdbPinsLayerRef.current = null
+      regionalHdbPinByIdRef.current.clear()
+      selectedRegionalHdbPinRef.current = null
     }
   }, [regions, selectedRegionCode])
 
   useEffect(() => {
-    if (selectedRegionalFootprintRef.current) {
-      selectedRegionalFootprintRef.current.setStyle(REGIONAL_FOOTPRINT_STYLE)
-      selectedRegionalFootprintRef.current = null
-    }
+    selectedRegionalHdbPinRef.current?.setStyle(HDB_PIN_STYLE)
+    selectedRegionalHdbPinRef.current = null
     if (!selectedRegionalHdb || !selectedRegionCode) return
-    const selected = regionalFootprintByIdRef.current.get(selectedRegionalHdb.buildingId)
+    const selected = regionalHdbPinByIdRef.current.get(selectedRegionalHdb.buildingId)
     if (!selected) return
-    selected.setStyle(SELECTED_REGIONAL_FOOTPRINT_STYLE)
-    selectedRegionalFootprintRef.current = selected
+    selected.setStyle(SELECTED_HDB_PIN_STYLE)
+    selectedRegionalHdbPinRef.current = selected
     selected.bringToFront()
   }, [selectedRegionalHdb, selectedRegionCode, footprintsStatus])
 
   useEffect(() => {
-    const map = mapRef.current
-    regionalHdbMarkerRef.current?.remove()
-    regionalHdbMarkerRef.current = null
-    if (!map || !selectedRegionalHdb) return
-    const marker = L.circleMarker([selectedRegionalHdb.latitude, selectedRegionalHdb.longitude], {
-      radius: 7,
-      color: '#ffffff',
-      weight: 2,
-      fillColor: '#8a4937',
-      fillOpacity: 1,
-    }).addTo(map)
-    marker.bindTooltip(`Existing HDB block ${selectedRegionalHdb.blockNumber}`, { direction: 'top' })
-    regionalHdbMarkerRef.current = marker
-    map.flyTo([selectedRegionalHdb.latitude, selectedRegionalHdb.longitude], 17, { duration: 0.55 })
-    return () => {
-      marker.remove()
-      if (regionalHdbMarkerRef.current === marker) regionalHdbMarkerRef.current = null
-    }
+    if (!selectedRegionalHdb) return
+    mapRef.current?.flyTo([selectedRegionalHdb.latitude, selectedRegionalHdb.longitude], 17, { duration: 0.55 })
   }, [selectedRegionalHdb])
 
   const zoomIn = () => mapRef.current?.zoomIn(1, { animate: true })
@@ -315,8 +263,15 @@ export function MapView({
   const fitFootprints = () => {
     const map = mapRef.current
     if (!map) return
-    const layer = selectedRegionCode ? selectedRegionLayerRef.current : regionLayerRef.current
-    if (layer && 'getBounds' in layer && typeof layer.getBounds === 'function') {
+    if (selectedRegionCode) {
+      const region = regions.find((candidate) => candidate.code === selectedRegionCode)
+      if (!region) return
+      const bounds = L.geoJSON(region.geometry).getBounds()
+      if (bounds.isValid()) map.fitBounds(bounds.pad(0.06), { maxZoom: 12, animate: true, duration: 0.45 })
+      return
+    }
+    const layer = regionLayerRef.current
+    if (layer) {
       const bounds = layer.getBounds()
       if (bounds.isValid()) map.fitBounds(bounds.pad(0.06), { maxZoom: 12, animate: true, duration: 0.45 })
     } else buildingLayerRef.current?.fitToData()
@@ -374,15 +329,17 @@ export function MapView({
           <span className="map-control-divider" />
           <button className="map-control-button" type="button" onClick={zoomOut} aria-label="Zoom out" title="Zoom out"><Minus size={17} aria-hidden="true" /></button>
         </div>
-        <button className="map-control-button reset-control rounded-xl border border-[#e2e7e1] bg-white/95 shadow-[0_4px_18px_rgba(32,45,38,0.12)] backdrop-blur-md" type="button" onClick={fitFootprints} aria-label="Show all HDB footprints" title="Show all HDB footprints"><LocateFixed size={16} aria-hidden="true" /></button>
+        <button className="map-control-button reset-control rounded-xl border border-[#e2e7e1] bg-white/95 shadow-[0_4px_18px_rgba(32,45,38,0.12)] backdrop-blur-md" type="button" onClick={fitFootprints} aria-label={selectedRegionCode ? 'Fit map to selected region' : 'Fit map to all planning regions'} title={selectedRegionCode ? 'Fit map to selected region' : 'Fit map to all planning regions'}><LocateFixed size={16} aria-hidden="true" /></button>
       </div>
       <div className="map-legend absolute bottom-5 left-5 z-[400] flex items-center gap-2 rounded-lg border border-white/80 bg-white/90 px-3 py-2 text-[10px] text-[#68736d] shadow-sm backdrop-blur-sm">
-        <span className="map-legend-swatch" aria-hidden="true" />
-        HDB footprint
-        <span className="map-legend-region" aria-hidden="true" />
-        Planning region
-        {selectedRegionalHdb && <span className="map-legend-selected" aria-hidden="true" />}
-        {selectedRegionalHdb && 'Selected HDB'}
+        {selectedRegionCode ? (
+          <>
+            <span className="map-legend-swatch" aria-hidden="true" /> HDB block pin
+            {selectedRegionalHdb && <><span className="map-legend-selected" aria-hidden="true" /> Selected HDB</>}
+          </>
+        ) : (
+          <><span className="map-legend-region" aria-hidden="true" /> Planning region</>
+        )}
       </div>
     </div>
   )

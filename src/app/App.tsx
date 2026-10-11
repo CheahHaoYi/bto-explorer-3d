@@ -160,6 +160,7 @@ export default function App() {
           <BuildingDetailsPanel
             building={selectedBuilding}
             regionalBuilding={selectedRegionalHdb?.building ?? null}
+            regionName={selectedRegion?.name ?? null}
             dataState={buildingLayerState}
             resaleHistory={resaleHistory}
             resaleStatus={resaleStatus}
@@ -195,6 +196,7 @@ export default function App() {
               compact
               building={selectedBuilding}
               regionalBuilding={selectedRegionalHdb?.building ?? null}
+              regionName={selectedRegion?.name ?? null}
               dataState={buildingLayerState}
               resaleHistory={resaleHistory}
               resaleStatus={resaleStatus}

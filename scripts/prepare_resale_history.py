@@ -117,6 +117,7 @@ def load_transactions(raw_dir: Path) -> tuple[dict[str, dict[str, Any]], dict[st
     skipped_reasons: dict[str, int] = defaultdict(int)
     source_row_count = 0
     source_files: list[str] = []
+    included_months: list[str] = []
     for filename in DATASET_FILES:
         path = raw_dir / filename
         if not path.is_file():
@@ -143,6 +144,7 @@ def load_transactions(raw_dir: Path) -> tuple[dict[str, dict[str, Any]], dict[st
                     skipped_rows += 1
                     skipped_reasons["missing identifier, unsupported flat type, invalid month, or negative price"] += 1
                     continue
+                included_months.append(month)
                 key = address_key(block, street)
                 group = groups.setdefault(key, {
                     "blockNumber": block,
@@ -160,6 +162,7 @@ def load_transactions(raw_dir: Path) -> tuple[dict[str, dict[str, Any]], dict[st
         "skippedInvalidRowCount": skipped_rows,
         "skippedReasons": dict(skipped_reasons),
         "sourceFiles": source_files,
+        "sourceMonthCoverage": [min(included_months), max(included_months)] if included_months else None,
     }
 
 
@@ -203,6 +206,7 @@ def prepare(raw_dir: Path, hdb_path: Path, under_construction_path: Path, proper
                 "transactionDateField": "month",
                 "priceField": "resale_price",
                 "sourceDateCoverage": f"{min(all_years)} to {max(all_years)}" if all_years else None,
+                "sourceMonthCoverage": row_counts["sourceMonthCoverage"],
                 "dateBasis": "Approval date for 1990–2012-02; registration date for 2012-03 onwards, following source dataset partitions.",
                 "aggregation": "Annual median transaction price and count by exact normalized block + street name; repeated independently for each flat type. Half-dollar medians are rounded to the nearest whole SGD. These are historical transaction observations, not current-value estimates.",
                 "sourceFiles": row_counts["sourceFiles"],

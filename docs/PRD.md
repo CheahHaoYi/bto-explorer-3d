@@ -3,7 +3,7 @@
 > **Canonical project context for ChatGPT, Codex, and collaborators**  
 > **Version:** 1.0  
 > **Last updated:** 11 October 2026 (Asia/Singapore)  
-> **Status:** 2D Leaflet MVP with regional HDB browsing and selected-block historical resale history implemented in the working tree; build verified, browser interaction review pending
+> **Status:** 2D Leaflet MVP with region-to-HDB pin selection, HDB property enrichment and block-level resale history implemented in the working tree; build verified, browser interaction review pending
 > **Owner:** Project creator  
 > **Repository name:** `bto-explorer-3d`  
 > **Deployment target:** `https://<github-username>.github.io/bto-explorer-3d/`
@@ -22,11 +22,11 @@ The product combines **map discovery + building visualization + spatial context 
 
 ### The MVP user journey
 
-1. Open a Singapore basemap centered on a data-derived demonstration area.
-2. See under-construction HDB footprints as interactive 2D outlines.
-3. Select a URA planning region and search or page through existing HDB blocks assigned to it.
-4. Click/tap an under-construction footprint or choose an existing HDB list item to highlight/locate it and inspect available identifiers.
-5. Pan and zoom the map, or refit the prepared footprint area.
+1. Open the Singapore overview with five softly filled URA planning regions.
+2. Select a region to replace the regional fill with clickable representative-point pins for existing HDB blocks.
+3. Select a pin or searchable list entry to focus the sidebar on that HDB block's identifiers, HDB Property Information attributes and exact-match resale history where available.
+4. Return to the regional list or switch regions, and return to the whole-map overview at any time.
+5. Continue to browse under-construction footprints as interactive 2D outlines.
 6. Use the static application on desktop and mobile through GitHub Pages.
 
 ---
@@ -518,9 +518,9 @@ Do not generate empty scaffolding for all future features at once. Create files 
 | Milestone | Target effort | Deliverable / exit gate | Actual status |
 |---|---:|---|---|
 | **M0 — Foundation** | 30 min | React/Vite/Tailwind/Leaflet app; Singapore raster basemap; responsive shell; build + Pages workflow. | Implemented; build and project-path asset routing verified; browser rendering and deployment require manual verification |
-| **M1 — Footprint map slice** | 60 min | Offline HDB footprint GeoJSON, 2D SVG outlines, selection and source identifiers. | Under-construction footprints and a five-region existing-HDB index prepared; build passes; in-browser interaction requires manual verification |
-| **M2 — Property enrichment** | 30 min | Verified data joins; floor/year/unit attributes where available; match-status report. | Not verified |
-| **M3 — Resale analytics** | 45 min | Static summaries from actual resale CSV; flat type filtering, period, counts and price trend. | Not verified |
+| **M1 — Footprint map slice** | 60 min | Offline HDB footprint GeoJSON, 2D outlines, selection and source identifiers. | Under-construction footprints and region-to-HDB pin navigation implemented; build passes; in-browser interaction requires manual verification |
+| **M2 — Property enrichment** | 30 min | Verified data joins; floor/year/unit attributes where available; match-status report. | HDB Property Information joins implemented with nullable year, floor/storey, dwelling/unit mix and source-use flags; metre height unavailable; build passes |
+| **M3 — Resale analytics** | 45 min | Static summaries from actual resale CSV; flat type filtering, period, counts and price trend. | All five raw CSV partitions prepared for 1990–2026; per-block annual median/count history and flat-type breakdown integrated; build passes |
 | **M4 — Demo polish/release** | 45 min | Search, optional featured BTO marker, responsive UI, docs, public GitHub Pages demo and smoke test. | Not verified |
 
 **Fallback if time is limited:** prioritize **M0 → M1 → GitHub Pages deployment** before extending with M2/M3. Do not assert M4's full functionality has shipped if earlier features were skipped.

@@ -2,20 +2,32 @@ import type { MultiPolygon } from 'geojson'
 import type { RegionDataset, RegionRecord, RegionalHdbRecord } from './types'
 
 const REGION_DATA_URL = `${import.meta.env.BASE_URL}data/regions/hdb-by-region.json`
-const FOOTPRINT_ASSET_BY_REGION: Record<string, string> = {
-  CR: 'buildings/cr.geojson',
-  ER: 'buildings/er.geojson',
-  NR: 'buildings/nr.geojson',
-  NER: 'buildings/ner.geojson',
-  WR: 'buildings/wr.geojson',
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
+}
+
+function isNullableNonNegativeInteger(value: unknown): value is number | null {
+  return value === null || (Number.isInteger(value) && (value as number) >= 0)
+}
+
+function parseNullableCountRecord<K extends string>(value: unknown, keys: readonly K[]): Record<K, number | null> | null {
+  if (value === undefined || value === null) return Object.fromEntries(keys.map((key) => [key, null])) as Record<K, number | null>
+  if (!isRecord(value)) return null
+  const entries = keys.map((key) => [key, value[key]] as const)
+  if (!entries.every(([, entry]) => isNullableNonNegativeInteger(entry))) return null
+  return Object.fromEntries(entries) as Record<K, number | null>
+}
+
+function parseNullableBooleanRecord<K extends string>(value: unknown, keys: readonly K[]): Record<K, boolean | null> | null {
+  if (value === undefined || value === null) return Object.fromEntries(keys.map((key) => [key, null])) as Record<K, boolean | null>
+  if (!isRecord(value)) return null
+  const entries = keys.map((key) => [key, value[key]] as const)
+  if (!entries.every(([, entry]) => entry === null || typeof entry === 'boolean')) return null
+  return Object.fromEntries(entries) as Record<K, boolean | null>
 }
 
 function isPosition(value: unknown): value is number[] {
@@ -46,6 +58,19 @@ function parseBuilding(value: unknown): RegionalHdbRecord | null {
       !(typeof value.streetCode === 'string' || value.streetCode === null) ||
       !isFiniteNumber(value.longitude) || value.longitude < -180 || value.longitude > 180 ||
       !isFiniteNumber(value.latitude) || value.latitude < -90 || value.latitude > 90) return null
+  const unitBreakdown = parseNullableCountRecord(value.unitBreakdown, [
+    'oneRoomSold', 'twoRoomSold', 'threeRoomSold', 'fourRoomSold', 'fiveRoomSold',
+    'executiveSold', 'multiGenerationSold', 'studioApartmentSold',
+  ] as const)
+  const propertyFlags = parseNullableBooleanRecord(value.propertyFlags, [
+    'residential', 'commercial', 'marketHawker', 'miscellaneous', 'multistoreyCarpark', 'precinctPavilion',
+  ] as const)
+  const yearCompleted = value.yearCompleted === undefined ? null : value.yearCompleted
+  const maxFloorLevel = value.maxFloorLevel === undefined ? null : value.maxFloorLevel
+  const totalDwellingUnits = value.totalDwellingUnits === undefined ? null : value.totalDwellingUnits
+  if (!isNullableNonNegativeInteger(yearCompleted) ||
+      !isNullableNonNegativeInteger(maxFloorLevel) ||
+      !isNullableNonNegativeInteger(totalDwellingUnits) || !unitBreakdown || !propertyFlags) return null
   return {
     buildingId: value.buildingId,
     blockNumber: value.blockNumber,
@@ -53,6 +78,11 @@ function parseBuilding(value: unknown): RegionalHdbRecord | null {
     streetCode: value.streetCode,
     longitude: value.longitude,
     latitude: value.latitude,
+    yearCompleted,
+    maxFloorLevel,
+    totalDwellingUnits,
+    unitBreakdown,
+    propertyFlags,
   }
 }
 
@@ -61,7 +91,7 @@ export function parseRegionDataset(payload: unknown): RegionDataset {
     throw new Error('Region HDB data has an unsupported or invalid format.')
   }
   const metadata = payload.metadata
-  if (!isRecord(metadata.hdbSource) || !isRecord(metadata.regionSource) ||
+  if (!isRecord(metadata.hdbSource) || !isRecord(metadata.regionSource) || !isRecord(metadata.propertyInformationSource) ||
       typeof metadata.license !== 'string' || typeof metadata.crsAssumption !== 'string' ||
       typeof metadata.assignmentMethod !== 'string' || !isRecord(metadata.counts) ||
       !Array.isArray(metadata.hdbSource.sourceFields) || !Array.isArray(metadata.regionSource.sourceFields) ||
@@ -79,7 +109,6 @@ export function parseRegionDataset(payload: unknown): RegionDataset {
         !isMultiPolygonCoordinates(rawRegion.geometry.coordinates) ||
         !Number.isInteger(rawRegion.buildingCount) || (rawRegion.buildingCount as number) < 0 ||
         !Array.isArray(rawRegion.buildings) ||
-        rawRegion.footprintsAsset !== FOOTPRINT_ASSET_BY_REGION[rawRegion.code] ||
         seenRegionCodes.has(rawRegion.code)) {
       throw new Error('Region HDB data contains an invalid or duplicate region.')
     }
@@ -102,7 +131,6 @@ export function parseRegionDataset(payload: unknown): RegionDataset {
       geometry: { type: 'MultiPolygon', coordinates: rawRegion.geometry.coordinates } as MultiPolygon,
       buildingCount: rawRegion.buildingCount as number,
       buildings,
-      footprintsAsset: rawRegion.footprintsAsset,
     })
   }
 
@@ -116,19 +144,27 @@ export function parseRegionDataset(payload: unknown): RegionDataset {
 
   const hdbSource = metadata.hdbSource as Record<string, unknown>
   const regionSource = metadata.regionSource as Record<string, unknown>
-  for (const source of [hdbSource, regionSource]) {
+  const propertyInformationSource = metadata.propertyInformationSource as Record<string, unknown>
+  for (const source of [hdbSource, regionSource, propertyInformationSource]) {
     if (typeof source.name !== 'string' || typeof source.url !== 'string') {
       throw new Error('Region HDB data source metadata is incomplete.')
     }
   }
   const hdbSourceFields = hdbSource.sourceFields as unknown[]
   const regionSourceFields = regionSource.sourceFields as unknown[]
+  const propertyInformationSourceFields = propertyInformationSource.sourceFields as unknown[]
+  const propertyInformationCountsSource = propertyInformationSource.counts
   const hdbByRegionSource = counts.hdbByRegion as Record<string, unknown>
   if (!(hdbSource.localSnapshotDate === null || typeof hdbSource.localSnapshotDate === 'string') ||
       !(regionSource.localRetrievalDate === null || typeof regionSource.localRetrievalDate === 'string') ||
       typeof regionSource.coverage !== 'string' ||
       !hdbSourceFields.every((field) => typeof field === 'string') ||
-      !regionSourceFields.every((field) => typeof field === 'string')) {
+      !regionSourceFields.every((field) => typeof field === 'string') ||
+      !(propertyInformationSource.localRetrievalDate === null || typeof propertyInformationSource.localRetrievalDate === 'string') ||
+      typeof propertyInformationSource.joinMethod !== 'string' ||
+      !propertyInformationSourceFields.every((field) => typeof field === 'string') ||
+      !isRecord(propertyInformationCountsSource) ||
+      !Object.values(propertyInformationCountsSource).every((count) => Number.isInteger(count) && (count as number) >= 0)) {
     throw new Error('Region HDB data provenance fields are invalid.')
   }
 
@@ -141,6 +177,11 @@ export function parseRegionDataset(payload: unknown): RegionDataset {
   }
   if (regions.some((region) => hdbByRegion[region.code] !== region.buildingCount)) {
     throw new Error('Region HDB data per-region counts do not match its lists.')
+  }
+
+  const propertyInformationCounts: Record<string, number> = {}
+  for (const [name, count] of Object.entries(propertyInformationCountsSource as Record<string, unknown>)) {
+    propertyInformationCounts[name] = count as number
   }
 
   return {
@@ -158,6 +199,14 @@ export function parseRegionDataset(payload: unknown): RegionDataset {
         coverage: regionSource.coverage as string,
         localRetrievalDate: regionSource.localRetrievalDate as string | null,
         sourceFields: regionSourceFields as string[],
+      },
+      propertyInformationSource: {
+        name: propertyInformationSource.name as string,
+        url: propertyInformationSource.url as string,
+        localRetrievalDate: propertyInformationSource.localRetrievalDate as string | null,
+        sourceFields: propertyInformationSourceFields as string[],
+        counts: propertyInformationCounts,
+        joinMethod: propertyInformationSource.joinMethod as string,
       },
       license: metadata.license,
       crsAssumption: metadata.crsAssumption,
@@ -185,48 +234,4 @@ export async function loadRegionDataset(): Promise<RegionDataset> {
     throw new Error('Region HDB data is not valid JSON.')
   }
   return parseRegionDataset(payload)
-}
-
-export async function loadRegionFootprints(region: RegionRecord, signal: AbortSignal): Promise<GeoJSON.FeatureCollection> {
-  const response = await fetch(`${import.meta.env.BASE_URL}data/regions/${region.footprintsAsset}`, { signal })
-  if (!response.ok) throw new Error(`${region.name} footprint data returned HTTP ${response.status}.`)
-  let payload: unknown
-  try {
-    payload = await response.json()
-  } catch {
-    throw new Error(`${region.name} footprint data is not valid JSON.`)
-  }
-  if (!isRecord(payload) || payload.type !== 'FeatureCollection' || !Array.isArray(payload.features) ||
-      !isRecord(payload.metadata) || payload.metadata.regionCode !== region.code ||
-      payload.metadata.featureCount !== region.buildingCount || payload.features.length !== region.buildingCount ||
-      typeof payload.metadata.source !== 'string' || typeof payload.metadata.sourceUrl !== 'string' ||
-      typeof payload.metadata.regionSource !== 'string' || typeof payload.metadata.regionSourceUrl !== 'string' ||
-      typeof payload.metadata.license !== 'string' || typeof payload.metadata.crsAssumption !== 'string' ||
-      typeof payload.metadata.geometryTransformation !== 'string') {
-    throw new Error(`${region.name} footprint data does not match the regional index.`)
-  }
-  const knownBuildings = new Map(region.buildings.map((building) => [building.buildingId, building]))
-  const seen = new Set<string>()
-  const features: GeoJSON.Feature[] = []
-  for (const feature of payload.features) {
-    if (!isRecord(feature) || feature.type !== 'Feature' || typeof feature.id !== 'string' ||
-        !isRecord(feature.properties) || feature.properties.building_id !== feature.id ||
-        !knownBuildings.has(feature.id) || seen.has(feature.id) || !isRecord(feature.geometry)) {
-      throw new Error(`${region.name} footprint data contains an invalid or duplicate HDB feature.`)
-    }
-    const geometry = feature.geometry
-    const validGeometry = (geometry.type === 'Polygon' && isPolygonCoordinates(geometry.coordinates)) ||
-      (geometry.type === 'MultiPolygon' && isMultiPolygonCoordinates(geometry.coordinates))
-    if (!validGeometry) throw new Error(`${region.name} footprint data contains an invalid HDB geometry.`)
-    const indexRecord = knownBuildings.get(feature.id)!
-    if (feature.properties.block_number !== indexRecord.blockNumber ||
-        feature.properties.postal_code !== indexRecord.postalCode ||
-        feature.properties.street_code !== indexRecord.streetCode ||
-        feature.properties.longitude !== indexRecord.longitude || feature.properties.latitude !== indexRecord.latitude) {
-      throw new Error(`${region.name} footprint properties do not match the regional HDB list.`)
-    }
-    seen.add(feature.id)
-    features.push(feature as unknown as GeoJSON.Feature)
-  }
-  return { type: 'FeatureCollection', features }
 }
