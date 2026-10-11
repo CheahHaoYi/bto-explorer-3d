@@ -6,14 +6,14 @@ This document defines the static JSON/GeoJSON boundary between offline data prep
 
 - Publish only compact, derived assets needed by the static frontend under `public/data/`.
 - Use UTF-8 JSON. Include a `schemaVersion` on non-GeoJSON JSON documents; change it when a breaking shape change is made.
-- Include source name, source URL, retrieval date, transformations, and relevant assumptions with published data. Do not claim a value is official if it is derived or estimated.
+- Include source name, source URL, retrieval date (or explicit `null` when unavailable), transformations, and relevant assumptions with published data. Do not claim a value is official if it is derived or estimated.
 - Dates use ISO 8601. Price values use whole Singapore dollars (`SGD`) and counts are non-negative integers.
 - Missing values are `null` or omitted as permitted by the type. Do not encode missing values as `0`, empty strings, or fabricated coordinates.
 - Validate parsed JSON at its ingestion boundary before passing it to UI components. TypeScript types do not validate runtime JSON.
 
 ## Building GeoJSON
 
-The current map reads `public/data/demo/buildings.geojson` via `import.meta.env.BASE_URL`. It is an RFC 7946 `FeatureCollection` containing Polygon or MultiPolygon features in WGS 84 longitude/latitude order (`[longitude, latitude]`).
+The map reads `public/data/under-construction/buildings.geojson` via `import.meta.env.BASE_URL`. It is an RFC 7946 `FeatureCollection` containing Polygon or MultiPolygon features in WGS 84 longitude/latitude order (`[longitude, latitude]`).
 
 Each feature must provide:
 
@@ -31,6 +31,14 @@ Each feature must provide:
 The collection may include a top-level `metadata` object recording the source, CRS assumption, selection/simplification rules, demo-area description, and height note. Never represent an unverified BTO site with an invented point or footprint.
 
 `BuildingRecord` is the normalized TypeScript view of a selected feature. Preserve `buildingId` across conversion; retain nullable identifiers and provenance.
+
+## Region HDB index
+
+The browser reads `public/data/regions/hdb-by-region.json` via `import.meta.env.BASE_URL`. It is a versioned JSON object with `schemaVersion: 1`, provenance metadata, and a `regions` array. Each region has a stable `code`, source `name`, source MultiPolygon geometry, `buildingCount`, and HDB building list.
+
+Each HDB list item contains a stable source-derived ID, block number, postal code, street code when present, and a WGS 84 representative point. It does not contain or replace the source footprint. `buildingCount` must equal the list length; IDs must be unique across the dataset; per-region counts in metadata must match each list; coordinates and MultiPolygon rings are validated at runtime.
+
+The preprocessing join assigns a valid HDB existing-building footprint to the single URA region that covers its Shapely representative point. Invalid, unassigned, or multiply assigned records must be counted and omitted. Do not silently repair source geometry or infer HDB status from generic building footprints.
 
 ## Project JSON
 

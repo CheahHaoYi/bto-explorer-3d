@@ -164,6 +164,52 @@ button {
   scrollbar-width: thin;
 }
 
+.region-browser {
+  flex: 0 1 54%;
+  min-height: 225px;
+  max-height: 56%;
+}
+
+.region-browser-list {
+  scrollbar-color: #dce3dc transparent;
+  scrollbar-width: thin;
+}
+
+.region-page-button {
+  display: flex;
+  width: 30px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e5e9e3;
+  border-radius: 7px;
+  color: #5c6961;
+}
+
+.region-page-button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.region-page-button:focus-visible {
+  outline: 2px solid #476b52;
+  outline-offset: 2px;
+}
+
+.map-legend-region {
+  width: 17px;
+  border-top: 2px dashed #596f5e;
+}
+
+.map-legend-selected {
+  width: 9px;
+  height: 9px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #8a4937;
+  box-shadow: 0 0 0 1px #8a4937;
+}
+
 .mobile-explore-link {
   display: none;
 }
@@ -274,6 +320,15 @@ button {
 
   .mobile-panel-content {
     padding-top: 10px;
+  }
+
+  .mobile-panel-content .region-browser {
+    max-height: 360px;
+    min-height: 265px;
+    flex-basis: 330px;
+    border: 1px solid #e7eae5;
+    border-radius: 14px;
+    margin-bottom: 14px;
   }
 
   .mobile-panel-content[hidden] {

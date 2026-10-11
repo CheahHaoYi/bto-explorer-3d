@@ -14,28 +14,24 @@
 ## HDB Existing Building footprints
 
 - **Publisher:** Housing & Development Board (HDB), catalogued on [data.gov.sg](https://data.gov.sg/datasets/d_16b157c52ed637edd6ba1232e026258d/view).
-- **Local input used:** `data/raw/HDBExistingBuilding.geojson` (the requested lowercase `hdb_existing_buildings.geojson` is also accepted). The raw file is local and excluded from Git.
-- **Catalog fields observed in the local file:** `BLK_NO`, `ENTITYID`, `FMEL_UPD_D`, `INC_CRC`, `OBJECTID`, `POSTAL_COD`, `SHAPE.AREA`, `SHAPE.LEN`, and `ST_COD`.
-- **Observed input count and geometry types:** 13,436 features; 13,426 Polygon and 10 MultiPolygon geometries.
-- **Identifiers:** `ENTITYID` and `OBJECTID` were unique and non-null across this local snapshot. The app derives stable prefixed IDs from these source identifiers, with a content-hash fallback if a source identifier is unavailable or duplicated.
-- **CRS:** The file has no declared `crs` member. Coordinate bounds are consistent with Singapore, and the pipeline assumes RFC 7946 WGS 84 longitude/latitude (OGC:CRS84; EPSG:4326 x/y order for transformations). This is an inference from format and coordinates, not an explicit CRS declaration in the file.
-- **Geometry quality:** Four source geometries are topologically invalid (self-intersections in the inspected snapshot); the preparation script skips them. It does not repair or invent shapes. Output geometries are validated after reprojection and simplification.
-- **License and refresh metadata:** See the current [data.gov.sg dataset page](https://data.gov.sg/datasets/d_16b157c52ed637edd6ba1232e026258d/view) and [Singapore Open Data Licence](https://data.gov.sg/open-data-licence). The local source file does not record a download date, so record a retrieval date when refreshing it and recheck the current terms.
+- **Local input used:** `data/raw/HDBExistingBuilding.geojson`. The raw file is local and excluded from Git; it does not contain a retrieval date. The catalog currently describes HDB Existing Buildings as updated every two months, with data from November 2025, but that catalog coverage is not asserted to be the coverage date of this local snapshot.
+- **Fields used:** `ENTITYID` (fallback `OBJECTID`) for a stable derived ID; `BLK_NO`, `POSTAL_COD`, and `ST_COD` for the list; geometry for validity checks and representative points.
+- **Observed input count and geometry types:** 13,436 features; 13,426 Polygon and 10 MultiPolygon geometries. Four geometries are topologically invalid and are skipped without repair. `ENTITYID` and `OBJECTID` are unique and non-null in this local snapshot.
+- **CRS:** The file has no declared `crs` member. Coordinate bounds are consistent with Singapore, so the preparation assumes RFC 7946 WGS 84 longitude/latitude. This is an inference, not an explicit source declaration.
+- **Region assignment:** Each valid footprint's Shapely representative point is assigned to the single region polygon that covers it. Geometry is not included in the regional index or modified; each output record contains its derived ID, source block number, postcode, street code, and representative-point coordinates. In this run all 13,432 valid footprints matched exactly one region; zero were unassigned or ambiguous. The count is by source footprint record, not a count of flats or dwellings.
+- **License/terms:** The catalog lists the Singapore Open Data Licence; check the [dataset page](https://data.gov.sg/datasets/d_16b157c52ed637edd6ba1232e026258d/view) and [licence](https://data.gov.sg/open-data-licence) when refreshing.
 
-The app uses the derived subset at `public/data/demo/buildings.geojson`, not the national raw file. The default area uses a 1.25 km radius around the representative point of the valid footprint nearest the existing map anchor. This derives a useful area from actual records; it does not imply a selected BTO development. Selection checks polygon intersection against a circular buffer after projection to SVY21 / EPSG:3414, whose coordinate units are metres. Optional simplification is topology-preserving, limited to 10 m maximum tolerance, and accepted only if geometry type/component count remain stable and area changes by no more than 1%.
+## Master Plan 2025 Region Boundary (No Sea)
 
-The original footprint coordinates are sourced geometry; projected/rounded output coordinates are transformed geometry. The current 2D map draws the source outlines without extruding them. The prepared GeoJSON retains a 45 m visualization-only field for compatibility with the data pipeline; the UI does not use or present it as measured height.
+- **Publisher:** Urban Redevelopment Authority (URA), catalogued on [data.gov.sg](https://data.gov.sg/datasets/d_4ce0038f7ac689652350bb91b7fb92ed/view).
+- **Local input used:** `data/raw/MasterPlan2025RegionBoundaryNoSea.geojson`. Its file retrieval date is unavailable. The source identifies itself as Master Plan 2025 region boundaries and its feature update fields are from December 2025.
+- **Source fields used:** `REGION_C`, `REGION_N`, and each Polygon/MultiPolygon geometry. The source contains five named planning regions.
+- **Boundary meaning:** URA describes these as indicative region polygons with sea areas excluded. Planning boundaries may not coincide with existing developments; they are used here as geographic groupings, not as HDB administrative boundaries.
+- **CRS:** The source has no `crs` member. Coordinates are consistent with Singapore and the GeoJSON format; WGS 84 longitude/latitude is assumed, not explicitly declared.
+- **License/terms:** See the dataset page and [Singapore Open Data Licence](https://data.gov.sg/open-data-licence).
+- **Browser asset:** `public/data/regions/hdb-by-region.json`, generated by `scripts/prepare_region_hdb_index.py`. It contains the five source region geometries and the HDB block index with region counts; source raw files are not published.
 
-Prepare the sample with:
-
-```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python scripts/inspect_data.py
-.venv/bin/python scripts/prepare_buildings.py
-```
-
-To configure a different area, pass `--longitude`, `--latitude` and `--radius-km` together as needed. The reduced output, not raw input, is fetched by the browser through `import.meta.env.BASE_URL`.
+The file `data/raw/MasterPlan2019Buildinglayer.geojson` is not used for region or HDB identification. It contains generic building polygons, but its `BLDG_TYPE` field is null on all observed 14,355 records, so it does not support a reliable HDB-only list. The current app uses HDB's own existing-building footprints for block records and URA's 2025 region-boundary dataset for region polygons.
 
 ## Basemap tiles
 
@@ -45,7 +41,6 @@ The Leaflet map requests the standard OpenStreetMap raster tiles from `https://t
 
 Other files that may exist under `data/raw/` are not loaded or joined by this milestone:
 
-- `MasterPlan2019Buildinglayer.geojson`
 - `HDBPropertyInformation.csv`
 - `ResaleflatpricesbasedonregistrationdatefromJan2017onwards.csv`
 

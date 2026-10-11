@@ -9,8 +9,9 @@ src/
   app/                         application composition and app-owned state
   shared/                      canonical types and cross-feature prop contracts
   features/
-    map/                       MapLibre lifecycle, layers, map controls
+    map/                       Leaflet lifecycle, layers, map controls
     buildings/                 building selection/details presentation
+    regions/                   region index validation and region HDB browser
     projects/                  project data and search
     prices/                    resale summary presentation and charts
     walkthrough/               future indoor visualization placeholder
@@ -26,10 +27,10 @@ Keep product code under `src/features/<feature>/`. `src/shared/` holds stable in
 
 | Agent | Owns | Integration contract |
 |---|---|---|
-| **A — Map and 3D rendering** | `src/features/map/**`; map-specific CSS only when isolated in map-owned files; `src/features/buildings/**` only for map selection and footprint details agreed with D | Consume `MapComponentProps`; report a stable selected ID through `onBuildingSelection`. Preserve map teardown and use the configured public data URL/base path. |
-| **B — HDB data processing** | `scripts/**`, `requirements.txt`, source/provenance documentation, and generated `public/data/**` assets | Emit the versioned Building GeoJSON contract. Never fabricate or repair source geography silently; document skips, transformations, CRS assumptions, and licensing. |
+| **A — 2D map** | `src/features/map/**`; map-specific CSS only when isolated in map-owned files; `src/features/buildings/**` only for map selection and footprint details agreed with D | Consume the current map component interface; report stable selection IDs. Preserve Leaflet teardown and use the configured public data URL/base path. |
+| **B — HDB data processing** | `scripts/**`, `requirements.txt`, source/provenance documentation, and generated `public/data/**` assets | Emit validated static building and region-index data. Never fabricate or repair source geography silently; document skips, transformations, CRS assumptions, and licensing. |
 | **C — Resale-price analytics** | `src/features/prices/**`, price-specific scripts and generated `public/data/resale/**` assets, resale methodology sections in docs | Produce validated `ResalePriceSummary` data and present descriptive historical statistics through `PriceComponentProps`. No current-value estimator without a separately approved milestone. |
-| **D — UI/UX development** | `src/app/**`, `src/features/projects/**`, shell and responsive composition, and UI-specific styling in `src/index.css` | Compose map and sidebar children through `UiShellProps`; app owns shared selection/data state. Do not duplicate source processing or embed analytics state in the layout shell. |
+| **D — UI/UX development** | `src/app/**`, `src/features/projects/**`, `src/features/regions/**`, shell and responsive composition, and UI-specific styling in `src/index.css` | App owns shared selection and region state. Do not duplicate source processing or embed analytics state in the layout shell. |
 
 `src/shared/contracts.ts`, `src/shared/component-interfaces.ts`, `AGENTS.md`, and shared architecture/deployment files are integration-owned. Change those only through a coordinated contract PR agreed by all affected agents. Avoid editing another agent's owned paths; raise an interface change rather than silently changing it.
 

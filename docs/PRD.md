@@ -3,7 +3,7 @@
 > **Canonical project context for ChatGPT, Codex, and collaborators**  
 > **Version:** 1.0  
 > **Last updated:** 11 October 2026 (Asia/Singapore)  
-> **Status:** MVP rebuilt as a 2D Leaflet map per the 11 October 2026 user decision; verification pending
+> **Status:** 2D Leaflet MVP with regional HDB browsing implemented in the working tree; build verified, browser interaction review pending
 > **Owner:** Project creator  
 > **Repository name:** `bto-explorer-3d`  
 > **Deployment target:** `https://<github-username>.github.io/bto-explorer-3d/`
@@ -14,7 +14,7 @@
 
 ## 0. Executive summary
 
-**bto-explorer-3d** is a browser-based exploration and property intelligence tool for Singapore HDB and Build-To-Order (BTO) buyers. The current minimum viable application shows a navigable 2D map with real geographic HDB footprints. Future capabilities must respect the user's no-WebGL constraint unless they explicitly change it.
+**bto-explorer-3d** is a browser-based exploration and property intelligence tool for Singapore HDB and Build-To-Order (BTO) buyers. The current minimum viable application shows a navigable 2D map with under-construction HDB footprints, URA planning-region boundaries, and searchable lists of existing HDB blocks by region. Future capabilities must respect the user's no-WebGL constraint unless they explicitly change it.
 
 The product combines **map discovery + building visualization + spatial context + historical resale data** in one experience. Its long-term distinguishing feature is: **“Know your view before choosing your BTO unit.”** It must avoid claiming exact architectural dimensions, views, or individual property valuations when the source data does not support them.
 
@@ -23,10 +23,11 @@ The product combines **map discovery + building visualization + spatial context 
 ### The MVP user journey
 
 1. Open a Singapore basemap centered on a data-derived demonstration area.
-2. See **real existing HDB footprints** as interactive 2D outlines.
-3. Click/tap a block to highlight it and inspect available source identifiers.
-4. Pan and zoom the map, or refit the prepared footprint area.
-5. Use the static application on desktop and mobile through GitHub Pages.
+2. See under-construction HDB footprints as interactive 2D outlines.
+3. Select a URA planning region and search or page through existing HDB blocks assigned to it.
+4. Click/tap an under-construction footprint or choose an existing HDB list item to highlight/locate it and inspect available identifiers.
+5. Pan and zoom the map, or refit the prepared footprint area.
+6. Use the static application on desktop and mobile through GitHub Pages.
 
 ---
 
@@ -44,6 +45,7 @@ The product combines **map discovery + building visualization + spatial context 
 | Data | User states datasets have been downloaded | The local files under `data/raw/` have been inspected; current source schema and filters are recorded in `docs/DATA_SOURCES.md`. |
 | Development | Wants Codex prompts and progressive checkpoints | Treat PRD as persistent engineering context in repo; one milestone per Codex task. |
 | Project selection | Not provided | Remains a blocking input for an *authentic featured BTO*; a labeled demo neighborhood can be used meanwhile. |
+| Regional HDB browsing | On 11 Oct 2026, requested selection of a planning region and an HDB list for that region | Use URA Master Plan 2025 region boundaries and derive existing-HDB region membership from valid HDB Existing Building representative points; label the assignment as derived. |
 | Codex environment | Not provided | Must confirm local VS Code/Codex vs remote/cloud task before assuming raw files are accessible. |
 
 **Planning caution:** Previous conversational prompts are implementation instructions, not evidence that milestones were completed. All milestone status values remain **Not verified** until checked against the actual repository.
@@ -516,7 +518,7 @@ Do not generate empty scaffolding for all future features at once. Create files 
 | Milestone | Target effort | Deliverable / exit gate | Actual status |
 |---|---:|---|---|
 | **M0 — Foundation** | 30 min | React/Vite/Tailwind/Leaflet app; Singapore raster basemap; responsive shell; build + Pages workflow. | Implemented; build and project-path asset routing verified; browser rendering and deployment require manual verification |
-| **M1 — Footprint map slice** | 60 min | Offline filtered real HDB GeoJSON; 2D SVG outlines; click/tap selection and source identifiers. | Sample regenerated and validated; in-browser interaction requires manual verification |
+| **M1 — Footprint map slice** | 60 min | Offline HDB footprint GeoJSON, 2D SVG outlines, selection and source identifiers. | Under-construction footprints and a five-region existing-HDB index prepared; build passes; in-browser interaction requires manual verification |
 | **M2 — Property enrichment** | 30 min | Verified data joins; floor/year/unit attributes where available; match-status report. | Not verified |
 | **M3 — Resale analytics** | 45 min | Static summaries from actual resale CSV; flat type filtering, period, counts and price trend. | Not verified |
 | **M4 — Demo polish/release** | 45 min | Search, optional featured BTO marker, responsive UI, docs, public GitHub Pages demo and smoke test. | Not verified |
@@ -695,4 +697,4 @@ At the start of every task:
 ---
 
 **End of PRD v1.0.**  
-**Next action:** Keep the map MVP limited to a static 2D Leaflet map and sourced existing-HDB outlines. Do not start resale analytics, project-location claims, or 3D work without a later explicit request.
+**Next action:** Keep the map MVP static and 2D. Manually verify region selection, HDB list filtering/pagination, list-to-map location, mobile layout, and GitHub Pages asset paths. Do not start resale analytics, project-location claims, or 3D work without a later explicit request.

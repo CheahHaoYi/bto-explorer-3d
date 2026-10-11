@@ -1,6 +1,6 @@
 # BTO Explorer 3D
 
-A map-first application for exploring Singapore HDB and BTO developments. The MVP uses Leaflet's 2D map renderer with OpenStreetMap raster tiles and real HDB under-construction building footprints. No WebGL is used.
+A map-first application for exploring Singapore HDB and BTO developments. The MVP uses Leaflet's 2D map renderer with OpenStreetMap raster tiles, HDB under-construction footprints, URA planning regions, and a searchable existing-HDB list. No WebGL is used.
 
 ## Run locally
 
@@ -18,9 +18,9 @@ npm run build
 npm run preview
 ```
 
-The production build is a static site in `dist/`. Leaflet loads OpenStreetMap raster tiles over the network and shows the required attribution. HDB footprint geometry is bundled as a small static GeoJSON file; the outlines still render over a neutral background if the tile service is unavailable.
+The production build is a static site in `dist/`. Leaflet loads OpenStreetMap raster tiles over the network and shows the required attribution. HDB footprints and the region/HDB index are bundled as static assets; local outlines remain available if the tile service is unavailable.
 
-Drag to pan, scroll or pinch to zoom, use the zoom buttons, and select **Show all HDB footprints** to return to the prepared data extent. Choose a block from the dropdown or click a footprint to highlight it, zoom to it and inspect source identifiers. The source contains building blocks, not named BTO projects or project boundaries. This MVP is a flat 2D map with no 3D extrusion or building-height claim.
+Drag to pan, scroll or pinch to zoom, use the zoom buttons, and select **Show all HDB footprints** to return to the prepared data extent. Choose an under-construction block from the header dropdown or click a footprint to inspect its source identifiers. In the region panel, choose one of the five URA regions to see and search existing HDB blocks by block number or postal code. Select a listed block to zoom to its representative point. Region assignment is derived from each valid HDB footprint's representative point; the region boundaries are indicative planning boundaries. The source contains building blocks, not named BTO projects or project boundaries. This MVP is a flat 2D map with no 3D extrusion or building-height claim.
 
 ## Prepare the HDB demo data
 
@@ -42,11 +42,20 @@ Generate the browser dataset:
 
 All 899 valid source footprints are included. The source declares no CRS; coordinates are treated as WGS 84 longitude/latitude based on the GeoJSON format and Singapore coordinate bounds. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) for schema, assumptions and provenance.
 
+Prepare the region and existing-HDB index with:
+
+```sh
+.venv/bin/python scripts/prepare_region_hdb_index.py
+```
+
+It reads `data/raw/HDBExistingBuilding.geojson` and `data/raw/MasterPlan2025RegionBoundaryNoSea.geojson`, and writes the compact browser index to `public/data/regions/hdb-by-region.json`.
+
 ## Project structure
 
 - `src/app/` — application shell and responsive layout.
 - `src/features/map/` — Leaflet lifecycle, raster basemap, HDB polygon overlay and selection.
 - `src/features/buildings/` — building metadata types and details panel.
+- `src/features/regions/` — runtime validation and searchable HDB-by-region browser.
 - `src/features/projects/` — HDB block selector (source blocks are not named projects).
 - `src/features/prices/` — future analytics placeholder.
 - `src/features/walkthrough/` — future walkthrough placeholder.
@@ -63,4 +72,4 @@ Static assets in `public/` must be referenced with `import.meta.env.BASE_URL` so
 
 ## Scope and data
 
-The current MVP covers a navigable 2D basemap and selectable HDB under-construction footprints. There is no named-project grouping, property-data join, resale analytics, backend, database, 3D rendering or official height data. Raw inputs under `data/` remain ignored by Git; the prepared GeoJSON under `public/data/under-construction/` is the browser asset.
+The current MVP covers a navigable 2D basemap, selectable under-construction HDB footprints, 2025 planning-region boundaries, and searchable existing HDB block lists. There is no named-project grouping, resale analytics, backend, database, 3D rendering or official height data. Raw inputs under `data/` remain ignored by Git; derived assets under `public/data/` are served to the browser.
