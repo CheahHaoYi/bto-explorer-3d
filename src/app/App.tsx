@@ -8,6 +8,7 @@ import { ProjectSearch } from '../features/projects/ProjectSearch'
 export default function App() {
   const [detailsExpanded, setDetailsExpanded] = useState(false)
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingMetadata | null>(null)
+  const [availableBuildings, setAvailableBuildings] = useState<BuildingMetadata[]>([])
   const [buildingLayerState, setBuildingLayerState] = useState<BuildingLayerState>(INITIAL_BUILDING_LAYER_STATE)
 
   const mobileDetailsSummary = selectedBuilding
@@ -15,7 +16,7 @@ export default function App() {
     : buildingLayerState.status === 'ready'
       ? 'Tap a building to inspect it'
       : buildingLayerState.status === 'loading'
-        ? 'Loading HDB footprints…'
+        ? 'Loading under-construction HDB blocks…'
         : 'HDB footprint data unavailable'
 
   return (
@@ -29,7 +30,14 @@ export default function App() {
           </div>
         </a>
 
-        <ProjectSearch />
+        <ProjectSearch
+          buildings={availableBuildings}
+          selectedBuildingId={selectedBuilding?.buildingId ?? null}
+          onSelect={(buildingId) => {
+            if (!buildingId) setSelectedBuilding(null)
+            else setSelectedBuilding(availableBuildings.find((building) => building.buildingId === buildingId) ?? null)
+          }}
+        />
 
         <div className="header-actions flex shrink-0 items-center gap-3">
           <span className="desktop-status hidden items-center gap-2 rounded-full border border-[#e7ebe6] bg-[#fafbf9] px-3 py-2 text-[11px] font-medium text-[#69736e] sm:flex">
@@ -46,8 +54,10 @@ export default function App() {
         <section className="map-stage relative min-w-0 flex-1" aria-label="Map of Singapore">
           <MapView
             buildingLayerState={buildingLayerState}
+            selectedBuildingId={selectedBuilding?.buildingId ?? null}
             onBuildingLayerState={setBuildingLayerState}
             onBuildingSelected={setSelectedBuilding}
+            onBuildingsLoaded={setAvailableBuildings}
           />
           <div className="map-context pointer-events-none absolute left-6 top-6 z-10">
             <div className="map-context-card rounded-xl border border-white/80 bg-white/90 px-4 py-3 shadow-[0_8px_28px_rgba(30,48,41,0.08)] backdrop-blur-md">

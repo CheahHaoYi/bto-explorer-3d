@@ -1,6 +1,6 @@
 # BTO Explorer 3D
 
-A map-first application for exploring Singapore HDB and BTO developments. Milestone 0 established the responsive MapLibre application shell. Milestone 1 adds a reduced sample of real HDB building footprints, 3D visualization-only extrusions, building selection and source identifiers.
+A map-first application for exploring Singapore HDB and BTO developments. The MVP uses Leaflet's 2D map renderer with OpenStreetMap raster tiles and real HDB under-construction building footprints. No WebGL is used.
 
 ## Run locally
 
@@ -18,11 +18,13 @@ npm run build
 npm run preview
 ```
 
-The production build is a static site in `dist/`. The map loads the OpenFreeMap Bright style over the network and preserves the map style's attribution.
+The production build is a static site in `dist/`. Leaflet loads OpenStreetMap raster tiles over the network and shows the required attribution. HDB footprint geometry is bundled as a small static GeoJSON file; the outlines still render over a neutral background if the tile service is unavailable.
+
+Drag to pan, scroll or pinch to zoom, use the zoom buttons, and select **Show all HDB footprints** to return to the prepared data extent. Choose a block from the dropdown or click a footprint to highlight it, zoom to it and inspect source identifiers. The source contains building blocks, not named BTO projects or project boundaries. This MVP is a flat 2D map with no 3D extrusion or building-height claim.
 
 ## Prepare the HDB demo data
 
-The browser loads only `public/data/demo/buildings.geojson`, a small subset derived from the raw HDB Existing Building GeoJSON. Keep the full source file in the ignored `data/raw/` directory. The current local copy is named `HDBExistingBuilding.geojson`; the script also accepts the requested lowercase `hdb_existing_buildings.geojson` path.
+The browser loads `public/data/under-construction/buildings.geojson`, derived from all valid footprints in `data/raw/HDBUnderConstructionBuildings.geojson`. Raw input remains in the ignored `data/raw/` directory.
 
 Set up the offline Python tooling and inspect the source schema:
 
@@ -35,29 +37,23 @@ python3 -m venv .venv
 Generate the browser dataset:
 
 ```sh
-.venv/bin/python scripts/prepare_buildings.py
+.venv/bin/python scripts/prepare_under_construction.py
 ```
 
-The default demo area is a 1.25 km radius around the representative point of a real source footprint nearest the existing map anchor. It is a demonstration area, not a selected BTO location. Override its longitude, latitude and radius as needed:
-
-```sh
-.venv/bin/python scripts/prepare_buildings.py --longitude 103.82 --latitude 1.35 --radius-km 1.5
-```
-
-Distance selection and optional topology-preserving simplification use EPSG:3414 (SVY21, metres); exported geometry is WGS 84 longitude/latitude. Source footprints are real. Extrusion height defaults to a clearly labeled visualization-only 45 m and is not an official measurement. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) for schema, assumptions and provenance.
+All 899 valid source footprints are included. The source declares no CRS; coordinates are treated as WGS 84 longitude/latitude based on the GeoJSON format and Singapore coordinate bounds. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) for schema, assumptions and provenance.
 
 ## Project structure
 
 - `src/app/` — application shell and responsive layout.
-- `src/features/map/` — MapLibre lifecycle, camera controls, HDB source/layer and selection.
+- `src/features/map/` — Leaflet lifecycle, raster basemap, HDB polygon overlay and selection.
 - `src/features/buildings/` — building metadata types and details panel.
-- `src/features/projects/` — search-field placeholder.
+- `src/features/projects/` — HDB block selector (source blocks are not named projects).
 - `src/features/prices/` — future analytics placeholder.
 - `src/features/walkthrough/` — future walkthrough placeholder.
 - `scripts/` — offline source inspection and demo GeoJSON preparation.
 - `docs/` — product requirements, architecture, source notes and roadmap.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Only Milestones 0 and 1 are implemented; later roadmap work remains out of scope.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The current MVP is limited to the 2D map, sourced existing-HDB outlines, selection and static deployment setup.
 
 ## GitHub Pages
 
@@ -67,4 +63,4 @@ Static assets in `public/` must be referenced with `import.meta.env.BASE_URL` so
 
 ## Scope and data
 
-Milestone 1 covers sourced HDB footprints and their map selection only. There is no property-data join, resale analytics, backend, database or official height data. Raw inputs under `data/` remain ignored by Git; the reduced derived demo GeoJSON under `public/data/demo/` is the browser asset.
+The current MVP covers a navigable 2D basemap and selectable HDB under-construction footprints. There is no named-project grouping, property-data join, resale analytics, backend, database, 3D rendering or official height data. Raw inputs under `data/` remain ignored by Git; the prepared GeoJSON under `public/data/under-construction/` is the browser asset.

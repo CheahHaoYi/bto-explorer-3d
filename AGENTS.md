@@ -2,7 +2,7 @@
 
 ## Project scope
 
-- Milestones 0 and 1 are implemented: the static React, TypeScript and Vite shell includes a Singapore MapLibre map, a reduced real HDB footprint sample, 3D extrusion selection, responsive details UI, documentation and GitHub Pages deployment setup.
+- The current requested MVP is a static React, TypeScript and Vite 2D map using Leaflet, a reduced real HDB footprint sample, responsive details UI, documentation and GitHub Pages deployment setup. Do not use WebGL or MapLibre for this project unless the user changes this constraint.
 - Implement only the milestone the user explicitly requests. Do not start later roadmap milestones prematurely.
 - Keep the site fully static. Do not add a backend, database, client-side secrets or server-side rendering.
 - Avoid adding dependencies beyond the current milestone's stack. Shapely and pyproj are approved for offline Milestone 1 processing; keep future analytics and 3D-framework dependencies deferred.
@@ -11,7 +11,7 @@
 
 - Put product code in `src/` and group domain code under `src/features/<feature>/`.
 - Keep future-only feature folders as short README placeholders until their milestone begins.
-- Keep map initialization and cleanup in the map feature. Remove MapLibre instances and listeners when components unmount.
+- Keep map initialization and cleanup in the map feature. Remove Leaflet maps, layers and listeners when components unmount.
 - Use accessible names, keyboard-operable controls and responsive layouts.
 - Use `import.meta.env.BASE_URL` when referencing files from `public/`.
 

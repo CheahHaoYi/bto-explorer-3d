@@ -7,8 +7,7 @@ export type {
   BuildingSourceProperties,
 } from '../../shared/contracts'
 
-/** Backward-compatible shape used by the currently implemented details panel. */
-export type BuildingMetadata = Omit<BuildingRecord, 'dataSourceUrl'>
+export type BuildingMetadata = BuildingRecord
 
 export type BuildingLayerStatus = 'loading' | 'ready' | 'missing' | 'empty' | 'invalid' | 'error'
 
@@ -21,7 +20,7 @@ export interface BuildingLayerState {
 
 export const INITIAL_BUILDING_LAYER_STATE: BuildingLayerState = {
   status: 'loading',
-  message: 'Loading the prepared HDB footprint sample…',
+  message: 'Loading under-construction HDB footprints…',
   featureCount: 0,
   skippedFeatureCount: 0,
 }

@@ -3,7 +3,7 @@
 > **Canonical project context for ChatGPT, Codex, and collaborators**  
 > **Version:** 1.0  
 > **Last updated:** 11 October 2026 (Asia/Singapore)  
-> **Status:** Planning / dataset preparation; implementation progress has **not** been verified  
+> **Status:** MVP rebuilt as a 2D Leaflet map per the 11 October 2026 user decision; verification pending
 > **Owner:** Project creator  
 > **Repository name:** `bto-explorer-3d`  
 > **Deployment target:** `https://<github-username>.github.io/bto-explorer-3d/`
@@ -14,7 +14,7 @@
 
 ## 0. Executive summary
 
-**bto-explorer-3d** is a browser-based 3D exploration and property intelligence tool for Singapore HDB and Build-To-Order (BTO) buyers. A user opens an interactive Singapore map, finds an HDB block or featured BTO development, selects a building, and examines its surroundings using a real geographic footprint rendered as a 3D massing model. The experience will expand to floor-level viewpoint simulation, corridor and flat walkthroughs, and resale-price intelligence using public data from data.gov.sg.
+**bto-explorer-3d** is a browser-based exploration and property intelligence tool for Singapore HDB and Build-To-Order (BTO) buyers. The current minimum viable application shows a navigable 2D map with real geographic HDB footprints. Future capabilities must respect the user's no-WebGL constraint unless they explicitly change it.
 
 The product combines **map discovery + building visualization + spatial context + historical resale data** in one experience. Its long-term distinguishing feature is: **“Know your view before choosing your BTO unit.”** It must avoid claiming exact architectural dimensions, views, or individual property valuations when the source data does not support them.
 
@@ -22,13 +22,11 @@ The product combines **map discovery + building visualization + spatial context 
 
 ### The MVP user journey
 
-1. Open a Singapore map centered on a selected demonstration area.
-2. See **real existing HDB footprints** represented as interactive 3D extrusions.
-3. Click/tap a block to highlight it and see verified available identifiers and details.
-4. Explore the block externally: pan, zoom, rotate, and tilt.
-5. See nearby historical HDB resale statistics where the geography and matching are supported.
-6. Optionally view a **featured BTO project marker** at a verified location and explore nearby existing blocks.
-7. Use the experience on desktop and mobile via a publicly accessible GitHub Pages URL.
+1. Open a Singapore basemap centered on a data-derived demonstration area.
+2. See **real existing HDB footprints** as interactive 2D outlines.
+3. Click/tap a block to highlight it and inspect available source identifiers.
+4. Pan and zoom the map, or refit the prepared footprint area.
+5. Use the static application on desktop and mobile through GitHub Pages.
 
 ---
 
@@ -38,12 +36,12 @@ The product combines **map discovery + building visualization + spatial context 
 |---|---|---|
 | Name | `bto-explorer-3d` | Use for repository, application title, and Vite base path. |
 | Geographic scope | Existing HDB **and** future BTO; start with **one BTO development plus surrounding existing buildings** | Start with a compact demo area and one featured project; expand coverage later. |
-| 3D roadmap | Build external exploration **A**, floor viewing **B**, walkthrough **C**, then the full experience **D** | MapLibre for A/B, add Three.js for C, integrate analytics/comparison for D. |
+| Rendering constraint | The map must work without WebGL | Leaflet 2D map with SVG outlines; any later rendering change needs explicit user direction. |
 | Pricing priority | Show historical HDB resale transactions and **estimate the present value of existing resale flats** | Start with transparent resale statistics; add validated comparable-sales and statistical estimates later. **Do not** prioritize predicting BTO prices or future resale appreciation. |
 | Experience | Responsive desktop/mobile, desktop-first; similar primary controls | Desktop sidebar; mobile bottom panel; both support selection and navigation. |
 | Skills | Comfortable with frontend; wants verification and clarification during development | Keep milestones small and require build/test evidence. |
 | Delivery | Half-day hackathon, working prototype within the day; may extend afterward | Target M0–M4, with M0+M1+deployment as minimum fallback. |
-| Data | User states datasets have been downloaded | **Exact local filenames, contents, and schema have not been inspected here.** Codex must inspect before processing. |
+| Data | User states datasets have been downloaded | The local files under `data/raw/` have been inspected; current source schema and filters are recorded in `docs/DATA_SOURCES.md`. |
 | Development | Wants Codex prompts and progressive checkpoints | Treat PRD as persistent engineering context in repo; one milestone per Codex task. |
 | Project selection | Not provided | Remains a blocking input for an *authentic featured BTO*; a labeled demo neighborhood can be used meanwhile. |
 | Codex environment | Not provided | Must confirm local VS Code/Codex vs remote/cloud task before assuming raw files are accessible. |
@@ -92,16 +90,16 @@ Build a focused, trustworthy, approachable interface to connect **place → buil
 
 ### Stage A — Explore (hackathon)
 
-- Interactive 2D/3D Singapore map.
+- Interactive 2D Singapore map, without WebGL.
 - One verified demo area with **real HDB building footprints**.
 - Click/tap to select and highlight buildings.
-- Map navigation: pan, zoom, rotate, tilt, reset.
+- Map navigation: drag/touch pan, zoom, and fit-to-data reset.
 - Sidebar/panel showing available HDB identifiers and enriched attributes.
 - Real historical resale-price summaries for a verified block/area, with sample counts.
 - Featured BTO project marker **only if project location is verified**.
 - Responsive, public GitHub Pages deployment.
 
-### Stage B — View (post-hackathon)
+### Stage B — View (post-hackathon; deferred)
 
 - Floor selector using verified maximum floor counts when available.
 - Approximate camera elevation and direction controls.
@@ -109,7 +107,7 @@ Build a focused, trustworthy, approachable interface to connect **place → buil
 - Project-specific BTO footprint models derived from **verified site plans**.
 - Specific stack/window viewpoints only when positions and orientation are verified.
 
-### Stage C — Walk (post-hackathon)
+### Stage C — Walk (post-hackathon; deferred pending no-WebGL approach)
 
 - Separate Three.js/React Three Fiber corridor walkthrough scene.
 - Desktop WASD/mouse-look; mobile-friendly touch navigation.
@@ -142,9 +140,9 @@ Build a focused, trustworthy, approachable interface to connect **place → buil
 
 | ID | Priority | Requirement | Acceptance evidence |
 |---|---|---|---|
-| FR-01 | P0 | Singapore MapLibre basemap centered on configured demo area | Map renders; pan/zoom/pitch/rotate work in browser. |
+| FR-01 | P0 | Singapore Leaflet 2D map centered on configured demo area, without WebGL | Map and raster basemap render; pan and zoom work in browser. |
 | FR-02 | P0 | Offline extract of official existing HDB polygons to small GeoJSON | Generated file valid and sourced from downloaded dataset. |
-| FR-03 | P0 | 3D extrusion of demo HDB building polygons | Multiple recognizable footprints display at correct positions. |
+| FR-03 | P0 | Interactive 2D outlines of demo HDB building polygons | Multiple source footprints display at their geographic positions. |
 | FR-04 | P0 | Click/tap selection, visible highlight, details panel | Selected building ID persists until changed/cleared. |
 | FR-05 | P0 | Static Vite build on GitHub Pages | Deployed URL loads JS/CSS/GeoJSON and works on page refresh. |
 | FR-06 | P1 | Match HDB Property Information to building footprint | Documented join, match coverage and explicit unmatched records. |
@@ -186,13 +184,13 @@ Launch GitHub Pages
     ↓
 Singapore map centered on verified demo area
     ↓
-See 3D existing HDB buildings
+See existing HDB footprint outlines
     ↓
 Click/tap a building OR select featured BTO marker
     ↓
 Highlighted building/project + side/bottom details
     ↓
-Rotate, pitch, zoom, browse surrounding buildings
+Pan and zoom to browse surrounding buildings
     ↓
 View historical resale panel if available
     ↓
@@ -220,10 +218,9 @@ Project → Block → Floor → Approximate external viewpoint
 | App | **React + TypeScript + Vite** | Routing if needed | Static SPA, rapid development. |
 | Style | **Tailwind CSS v4** | shadcn/ui only where helpful | Fast clean responsive UI. |
 | Icons | **lucide-react** | — | Lightweight standardized icons. |
-| Basemap | **MapLibre GL JS + OpenFreeMap style** | Alternative licensed tile source if necessary | Browser-based geospatial renderer; no map key needed for prototype. |
-| 3D exterior | **MapLibre `fill-extrusion`** | More detailed geometry | Avoid a second rendering engine until necessary. |
-| 3D interior | Not installed for MVP | **Three.js + @react-three/fiber + @react-three/drei** | Better interaction/navigation with interior meshes. |
-| 3D assets | Procedural massing | **Blender + GLB/glTF** | Separate map-scale massing from detailed walkable scenes. |
+| Basemap | **Leaflet + OpenStreetMap raster tiles** | Another licensed raster provider if needed | Browser image/SVG rendering without WebGL or a map key. |
+| Building view | **Leaflet GeoJSON/SVG outlines** | Revisit only after explicit user direction | Keeps the map usable where WebGL is unavailable. |
+| 3D scenes | Not part of the current MVP | Requires a separate technical decision | The user's current project constraint is to avoid WebGL. |
 | ETL | **Python + Pandas + Shapely + pyproj** | GeoPandas, Polars, geometry optimization | Convert raw government data to compact static assets. |
 | Charts | Recharts when needed | — | Historical trends in selected building/area. |
 | Pricing | Descriptive medians | scikit-learn, backtests | Transparency before estimates. |
@@ -232,7 +229,7 @@ Project → Block → Floor → Approximate external viewpoint
 | CI/CD | **GitHub Actions + GitHub Pages** | Scheduled data refresh workflow | Publish static compiled assets. |
 | Product workflow | ChatGPT/Codex + GitHub | Figma, Mobbin, Miro | Progressive development with explicit checkpoints. |
 
-**Important architecture choice:** MapLibre handles exterior map and massing. Three.js appears as a **separate indoor scene**, loaded on demand, while the application preserves selected project/block/floor state between scenes.
+The former MapLibre / Three.js architecture is superseded for this build by the user's no-WebGL instruction. Do not restore those renderers implicitly.
 
 ### Supporting product tools
 
@@ -263,7 +260,7 @@ Small versioned public/data/demo/*.geojson and *.json assets
     │
     ▼
 React + Vite static application
-    ├─ MapLibre map, 3D building layer, selection
+    ├─ Leaflet 2D map, HDB outline layer, selection
     ├─ Details and price panel
     └─ Later: lazy-loaded Three.js walkthrough
     │
@@ -498,7 +495,7 @@ Do not generate empty scaffolding for all future features at once. Create files 
 - No live Python/Node server in the website.
 - Never put private API keys, login credentials, or hidden tokens in the JS bundle or public repository.
 - For client-side navigation, prefer a single-page flow initially; if routes are introduced, consider `HashRouter` or a deliberate Pages-compatible fallback.
-- Support WebGL availability checks; display a usable explanatory fallback where possible.
+- Do not require WebGL to display the MVP map. Report raster tile errors while keeping local HDB outlines visible.
 
 ### Required deployment validation
 
@@ -518,8 +515,8 @@ Do not generate empty scaffolding for all future features at once. Create files 
 
 | Milestone | Target effort | Deliverable / exit gate | Actual status |
 |---|---:|---|---|
-| **M0 — Foundation** | 30 min | React/Vite/Tailwind/MapLibre app; Singapore basemap; responsive shell; build + Pages workflow. | Not verified |
-| **M1 — Exterior 3D** | 60 min | Offline filtered real HDB GeoJSON; extrusion; click/tap selection; source-transparent height assumptions. | Not verified |
+| **M0 — Foundation** | 30 min | React/Vite/Tailwind/Leaflet app; Singapore raster basemap; responsive shell; build + Pages workflow. | Implemented; build and project-path asset routing verified; browser rendering and deployment require manual verification |
+| **M1 — Footprint map slice** | 60 min | Offline filtered real HDB GeoJSON; 2D SVG outlines; click/tap selection and source identifiers. | Sample regenerated and validated; in-browser interaction requires manual verification |
 | **M2 — Property enrichment** | 30 min | Verified data joins; floor/year/unit attributes where available; match-status report. | Not verified |
 | **M3 — Resale analytics** | 45 min | Static summaries from actual resale CSV; flat type filtering, period, counts and price trend. | Not verified |
 | **M4 — Demo polish/release** | 45 min | Search, optional featured BTO marker, responsive UI, docs, public GitHub Pages demo and smoke test. | Not verified |
@@ -549,15 +546,14 @@ The hackathon demo is accepted only if:
 - [ ] The public GitHub Pages URL works without a server.
 - [ ] A real HDB polygon extracted from official downloaded data displays at the correct location.
 - [ ] At least one building can be selected via click/tap and highlighted.
-- [ ] The building can be inspected in 3D through rotate/zoom/pitch.
+- [ ] The map supports drag/touch pan and zoom without WebGL.
 - [ ] A metadata panel displays **known** block details or explicit missing-data states.
-- [ ] Historical resale data appears where reliable geographic matching exists; otherwise the app shows a clear unavailable/area-only state.
-- [ ] Building height and any reconstructed 3D feature are clearly marked approximate/illustrative.
+- [ ] Unimplemented resale, BTO, height and 3D features are not presented as available.
 - [ ] Map/data attribution is available.
 - [ ] The app is usable in a narrow mobile viewport.
 - [ ] No private API tokens are embedded in shipped assets.
 
-**Demo script:** Open published page → locate neighborhood/BTO marker → select real existing HDB building → orbit around massing → inspect property panel → view nearby actual resale summary and explanatory labels → select another building.
+**Demo script:** Open the local or published page → pan/zoom to the prepared HDB demo area → select a real existing HDB outline → inspect its available identifiers → refit all prepared footprints.
 
 ---
 
@@ -566,7 +562,7 @@ The hackathon demo is accepted only if:
 - **Performance:** Keep initial client-side geographic payload small (filtered neighborhood rather than 54 MB national GeoJSON); avoid needless map re-creation; load detailed 3D models only on request; measure load times on real devices.
 - **Responsiveness:** Desktop-first but core actions work by tap on mobile; no hover-only controls; touch targets roughly 44px; viewport layout not obstructed by sidebar.
 - **Accessibility:** Semantic input/button elements, keyboard-accessible controls and panels, focus indicators, sufficient contrast, labels for controls, reduced-motion awareness where animation is nonessential.
-- **Reliability:** Missing files, empty datasets, unsupported browser/WebGL, poor network, and unmatched addresses trigger meaningful messages rather than blank screens.
+- **Reliability:** Missing files, empty datasets, unsupported browser features, poor network, and unmatched addresses trigger meaningful messages rather than blank screens.
 - **Data integrity:** No fabricated HDB record or silent incorrect join; geo accuracy and uncertainty exposed.
 - **Security:** No secrets in frontend; no unnecessary personal data; external credentials only in local trusted environment/CI.
 - **Privacy:** No account or personal financial information in MVP. Later local shortlists should stay local unless explicit opt-in to sync.
@@ -613,7 +609,7 @@ The hackathon demo is accepted only if:
 | 3D asset size or mobile GPU cost | Slow/unstable application | Use reduced GeoJSON, lazy loading, GLB compression/LOD later. |
 | Misleading resale value estimates | Poor user decisions | Start with descriptive data, provide counts/period, backtest before prediction. |
 | GitHub Pages asset routing | Map loads but local data 404s | Correct Vite base + BASE_URL, test deployed environment. |
-| OpenFreeMap tile availability or policy changes | Base map outage / usage issue | Keep map style configurable and attribute sources. |
+| OpenStreetMap tile availability or policy changes | Raster basemap outage / usage issue | Keep tile layer isolated, follow its usage policy, and keep local footprints visible without tiles. |
 | Hackathon time pressure | Incomplete project | Protect M0/M1 and deploy early; move enhancement milestones afterward. |
 
 ---
@@ -674,8 +670,7 @@ At the start of every task:
 | 11 Oct 2026 | Responsive desktop/mobile with desktop-first implementation. | Confirmed by user |
 | 11 Oct 2026 | Half-day functional hackathon prototype; continue after the event. | Confirmed by user |
 | 11 Oct 2026 | GitHub Pages is mandatory. | Confirmed by user |
-| 11 Oct 2026 | React + TypeScript + Vite + MapLibre + OpenFreeMap + Python ETL + GitHub Actions. | Recommended and not objected to |
-| 11 Oct 2026 | Add Three.js/R3F/Drei at walkthrough stage rather than during MVP. | Recommended and not objected to |
+| 11 Oct 2026 | React + TypeScript + Vite + Leaflet + OpenStreetMap raster tiles + Python ETL + GitHub Actions; no WebGL for the map. | Confirmed by user request; replaces the earlier MapLibre choice |
 | 11 Oct 2026 | Publish derived data as static assets; no production backend. | Architectural requirement derived from hosting choice |
 | 11 Oct 2026 | Exact featured BTO project and Codex environment are **undecided**. | Open |
 
@@ -700,4 +695,4 @@ At the start of every task:
 ---
 
 **End of PRD v1.0.**  
-**Next action:** Place this file at `docs/PRD.md`, confirm the chosen featured project and actual dataset files, then ask Codex to inspect the repository and begin/verify M0.
+**Next action:** Keep the map MVP limited to a static 2D Leaflet map and sourced existing-HDB outlines. Do not start resale analytics, project-location claims, or 3D work without a later explicit request.

@@ -1,27 +1,18 @@
 # Roadmap
 
-Milestones 0 and 1 are implemented. The remaining milestones below are planning notes, not implemented features.
+## Current map MVP — implementation in this task
 
-## Milestone 0 — foundation (complete)
+- Static React, TypeScript and Vite app with the GitHub Pages repository base path.
+- Leaflet 2D map with OSM raster basemap; no WebGL.
+- HDB under-construction footprint GeoJSON generated offline from `data/raw/`.
+- Pan, zoom, fit-to-footprints, polygon and dropdown selection, plus source-identifier details.
+- Responsive shell, visible tile and data failure messages, and source attribution.
 
-- Vite, React, TypeScript, Tailwind CSS v4, MapLibre and Lucide.
-- Responsive Singapore map shell with accessible camera controls.
-- Placeholder search, building details and future analytics UI.
-- Feature-based source organization, project docs and GitHub Pages workflow.
+## Deferred
 
-## Milestone 1 — HDB footprint demo (complete)
+1. **Building data enrichment** — inspect and conservatively join property metadata.
+2. **Projects and discovery** — add verified BTO locations and operational search.
+3. **Resale prices** — prepare descriptive summaries from actual transactions with clear coverage and caveats.
+4. **Richer building views** — requires a new design/technology decision that respects the no-WebGL constraint.
 
-- Inspect the local HDB Existing Building schema and geometry validity.
-- Prepare a reduced, configurable subset in a metre-based projected CRS and preserve valid Polygon/MultiPolygon geometry.
-- Render real footprints as MapLibre 3D extrusions; label default height as visualization-only.
-- Select buildings, highlight the current selection, fly the camera and update the details panel.
-- Keep the national raw dataset out of the browser bundle.
-
-## Later milestones (not started)
-
-2. **Projects and discovery** — add real project metadata and useful map/search filters.
-3. **Resale prices** — inspect verified transaction data and build descriptive trends with clear caveats; do not join prices until records and geography can be matched reliably.
-4. **3D neighbourhoods** — improve verified building visualization and map-linked inspection.
-5. **Flat walkthroughs** — investigate source data and create a focused walkthrough prototype.
-
-The exact sequence and acceptance criteria for later work should be confirmed before each milestone. Keep this static deployment model unless the product requirements change.
+Do not add analytics, project locations or building measurements unless supported by inspected source data and requested for a later milestone.

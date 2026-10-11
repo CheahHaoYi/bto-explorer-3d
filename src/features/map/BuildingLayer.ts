@@ -1,9 +1,4 @@
-import type { GeoJSON } from 'geojson'
-import {
-  type MapLayerMouseEvent,
-  type MapMouseEvent,
-  type Map as MapLibreMap,
-} from 'maplibre-gl'
+import * as L from 'leaflet'
 import type {
   BuildingFeature,
   BuildingFeatureCollection,
@@ -11,26 +6,15 @@ import type {
   BuildingMetadata,
 } from '../buildings/types'
 
-const SOURCE_ID = 'hdb-building-footprints'
-const LAYER_ID = 'hdb-building-extrusions'
-const DATA_URL = `${import.meta.env.BASE_URL}data/demo/buildings.geojson`
-
-const MAP_PADDING = {
-  top: 115,
-  right: 85,
-  bottom: 145,
-  left: 85,
-}
+const DATA_URL = `${import.meta.env.BASE_URL}data/under-construction/buildings.geojson`
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function isPosition(value: unknown): value is number[] {
-  return (
-    Array.isArray(value) &&
-    value.length >= 2 &&
-    value.slice(0, 2).every((coordinate) => typeof coordinate === 'number' && Number.isFinite(coordinate))
+  return Array.isArray(value) && value.length >= 2 && value.slice(0, 2).every(
+    (coordinate) => typeof coordinate === 'number' && Number.isFinite(coordinate),
   )
 }
 
@@ -50,27 +34,21 @@ function isMultiPolygonCoordinates(value: unknown): boolean {
 }
 
 function isBuildingFeature(value: unknown): value is BuildingFeature {
-  if (!isRecord(value) || value.type !== 'Feature' || !isRecord(value.geometry)) return false
+  if (!isRecord(value) || value.type !== 'Feature' || !isRecord(value.geometry) || !isRecord(value.properties)) return false
   const geometry = value.geometry
-  const polygonalGeometry =
+  const polygonal =
     (geometry.type === 'Polygon' && isPolygonCoordinates(geometry.coordinates)) ||
     (geometry.type === 'MultiPolygon' && isMultiPolygonCoordinates(geometry.coordinates))
-  if (!polygonalGeometry || !isRecord(value.properties)) return false
-
   const properties = value.properties
-  return (
-    typeof properties.building_id === 'string' &&
-    properties.building_id.length > 0 &&
-    typeof properties.render_height_m === 'number' &&
-    Number.isFinite(properties.render_height_m) &&
-    properties.render_height_m > 0 &&
-    typeof properties.longitude === 'number' &&
-    Number.isFinite(properties.longitude) &&
-    typeof properties.latitude === 'number' &&
-    Number.isFinite(properties.latitude) &&
-    properties.height_source === 'visualization_only_default' &&
-    properties.height_is_official === false
-  )
+  return polygonal &&
+    typeof properties.building_id === 'string' && properties.building_id.length > 0 &&
+    value.id === properties.building_id &&
+    (typeof properties.block_number === 'string' || properties.block_number === null) &&
+    (typeof properties.postal_code === 'string' || properties.postal_code === null) &&
+    typeof properties.longitude === 'number' && Number.isFinite(properties.longitude) && properties.longitude >= -180 && properties.longitude <= 180 &&
+    typeof properties.latitude === 'number' && Number.isFinite(properties.latitude) && properties.latitude >= -90 && properties.latitude <= 90 &&
+    typeof properties.data_source === 'string' &&
+    typeof properties.source_properties === 'object' && properties.source_properties !== null && !Array.isArray(properties.source_properties)
 }
 
 function parseFeatureCollection(payload: unknown): {
@@ -82,18 +60,16 @@ function parseFeatureCollection(payload: unknown): {
   if (!isRecord(payload) || payload.type !== 'FeatureCollection' || !Array.isArray(payload.features)) {
     return { collection: null, sourceFeatureCount: 0, skippedFeatureCount: 0, invalidCollection: true }
   }
-
   const sourceFeatureCount = payload.features.length
-  const features = payload.features.filter(isBuildingFeature)
+  const seenIds = new Set<string>()
+  const features = payload.features.filter((value): value is BuildingFeature => {
+    if (!isBuildingFeature(value) || seenIds.has(value.properties.building_id)) return false
+    seenIds.add(value.properties.building_id)
+    return true
+  })
   if (features.length === 0) {
-    return {
-      collection: null,
-      sourceFeatureCount,
-      skippedFeatureCount: sourceFeatureCount,
-      invalidCollection: sourceFeatureCount > 0,
-    }
+    return { collection: null, sourceFeatureCount, skippedFeatureCount: sourceFeatureCount, invalidCollection: sourceFeatureCount > 0 }
   }
-
   return {
     collection: { type: 'FeatureCollection', features },
     sourceFeatureCount,
@@ -108,57 +84,60 @@ function toBuildingMetadata(feature: BuildingFeature): BuildingMetadata {
     buildingId: properties.building_id,
     blockNumber: properties.block_number,
     postalCode: properties.postal_code,
-    coordinates: {
-      longitude: properties.longitude,
-      latitude: properties.latitude,
-    },
+    coordinates: { longitude: properties.longitude, latitude: properties.latitude },
     geometry: feature.geometry,
     renderHeightM: properties.render_height_m,
     heightSource: properties.height_source,
     heightIsOfficial: properties.height_is_official,
     dataSource: properties.data_source,
+    dataSourceUrl: properties.data_source_url,
     sourceProperties: properties.source_properties,
   }
 }
 
-function getFeatureId(feature: BuildingFeature | undefined): string | null {
-  if (!feature) return null
-  const id = feature.properties.building_id || feature.id
-  return id === undefined || id === null ? null : String(id)
+const DEFAULT_STYLE: L.PathOptions = {
+  color: '#607866',
+  weight: 1.25,
+  opacity: 0.9,
+  fillColor: '#9bb79a',
+  fillOpacity: 0.55,
+}
+
+const SELECTED_STYLE: L.PathOptions = {
+  color: '#8a4937',
+  weight: 2.5,
+  opacity: 1,
+  fillColor: '#d68162',
+  fillOpacity: 0.82,
 }
 
 export class BuildingLayer {
   private disposed = false
-  private listenersAttached = false
   private selectedId: string | null = null
-  private hoveredId: string | null = null
+  private geoJsonLayer: L.GeoJSON | null = null
+  private readonly featureLayers = new Map<string, L.Path>()
+  private readonly featuresById = new Map<string, BuildingFeature>()
+  private readonly featureBoundsById = new Map<string, L.LatLngBounds>()
 
   constructor(
-    private readonly map: MapLibreMap,
+    private readonly map: L.Map,
     private readonly onSelect: (building: BuildingMetadata | null) => void,
     private readonly onState: (state: BuildingLayerState) => void,
+    private readonly onBuildingsLoaded: (buildings: BuildingMetadata[]) => void,
   ) {}
 
   async load(): Promise<void> {
-    this.onState({
-      status: 'loading',
-      message: 'Loading the prepared HDB footprint sample…',
-      featureCount: 0,
-      skippedFeatureCount: 0,
-    })
-
+    this.onState({ status: 'loading', message: 'Loading under-construction HDB footprints…', featureCount: 0, skippedFeatureCount: 0 })
     let response: Response
     try {
       response = await fetch(DATA_URL)
     } catch (error) {
-      if (!this.disposed) {
-        this.onState({
-          status: 'error',
-          message: `Could not fetch the prepared HDB sample. ${error instanceof Error ? error.message : ''}`.trim(),
-          featureCount: 0,
-          skippedFeatureCount: 0,
-        })
-      }
+      if (!this.disposed) this.onState({
+        status: 'error',
+        message: `Could not fetch the prepared HDB footprint data. ${error instanceof Error ? error.message : ''}`.trim(),
+        featureCount: 0,
+        skippedFeatureCount: 0,
+      })
       return
     }
 
@@ -166,19 +145,14 @@ export class BuildingLayer {
     if (response.status === 404) {
       this.onState({
         status: 'missing',
-        message: `Prepared HDB footprints are missing. Run python scripts/prepare_buildings.py from the repository root to create public/data/demo/buildings.geojson.`,
+        message: 'Prepared HDB footprints are missing. Run .venv/bin/python scripts/prepare_under_construction.py from the repository root.',
         featureCount: 0,
         skippedFeatureCount: 0,
       })
       return
     }
     if (!response.ok) {
-      this.onState({
-        status: 'error',
-        message: `The prepared HDB sample returned HTTP ${response.status}. Re-run python scripts/prepare_buildings.py and reload.`,
-        featureCount: 0,
-        skippedFeatureCount: 0,
-      })
+      this.onState({ status: 'error', message: `Prepared HDB sample returned HTTP ${response.status}.`, featureCount: 0, skippedFeatureCount: 0 })
       return
     }
 
@@ -186,26 +160,19 @@ export class BuildingLayer {
     try {
       payload = await response.json()
     } catch {
-      if (!this.disposed) {
-        this.onState({
-          status: 'invalid',
-          message: 'The prepared HDB file is not valid JSON. Re-run python scripts/prepare_buildings.py.',
-          featureCount: 0,
-          skippedFeatureCount: 0,
-        })
-      }
+      if (!this.disposed) this.onState({ status: 'invalid', message: 'Prepared HDB footprint file is not valid JSON.', featureCount: 0, skippedFeatureCount: 0 })
       return
     }
-
     if (this.disposed) return
+
     const parsed = parseFeatureCollection(payload)
     if (!parsed.collection) {
       const empty = parsed.sourceFeatureCount === 0 && !parsed.invalidCollection
       this.onState({
         status: empty ? 'empty' : 'invalid',
         message: empty
-          ? 'The prepared HDB file contains no buildings. Re-run python scripts/prepare_buildings.py with a larger radius or another demo centre.'
-          : 'The prepared HDB file has no valid Polygon or MultiPolygon features. Re-run python scripts/prepare_buildings.py.',
+          ? 'Prepared HDB footprint file contains no buildings.'
+          : 'Prepared HDB footprint file has no valid Polygon or MultiPolygon features.',
         featureCount: 0,
         skippedFeatureCount: parsed.skippedFeatureCount,
       })
@@ -213,156 +180,98 @@ export class BuildingLayer {
     }
 
     try {
-      if (!this.map.getSource(SOURCE_ID)) {
-        this.map.addSource(SOURCE_ID, {
-          type: 'geojson',
-          data: parsed.collection as unknown as GeoJSON,
-          promoteId: 'building_id',
-        })
-      }
-      if (!this.map.getLayer(LAYER_ID)) {
-        this.map.addLayer({
-          id: LAYER_ID,
-          type: 'fill-extrusion',
-          source: SOURCE_ID,
-          paint: {
-            'fill-extrusion-height': ['get', 'render_height_m'],
-            'fill-extrusion-base': 0,
-            'fill-extrusion-color': [
-              'case',
-              ['boolean', ['feature-state', 'selected'], false],
-              '#cb7950',
-              ['boolean', ['feature-state', 'hovered'], false],
-              '#a2b891',
-              '#6f8d78',
-            ],
-            'fill-extrusion-opacity': 0.92,
-          },
-        })
-      }
-      this.attachListeners()
-      this.fitToDemoArea(parsed.collection)
+      this.geoJsonLayer = L.geoJSON(parsed.collection as GeoJSON.FeatureCollection, {
+        style: () => ({ ...DEFAULT_STYLE }),
+        onEachFeature: (feature, layer) => {
+          if (!(layer instanceof L.Path)) return
+          const typedFeature = feature as BuildingFeature
+          const id = typedFeature.properties.building_id
+          layer.options.bubblingMouseEvents = false
+          this.featureLayers.set(id, layer)
+          this.featuresById.set(id, typedFeature)
+          if (layer instanceof L.Polyline) this.featureBoundsById.set(id, layer.getBounds())
+          layer.on('click', (event: L.LeafletMouseEvent) => {
+            L.DomEvent.stopPropagation(event)
+            this.selectFeature(typedFeature)
+          })
+          layer.on('mouseover', () => {
+            if (id !== this.selectedId) layer.setStyle({ weight: 2, fillOpacity: 0.72 })
+          })
+          layer.on('mouseout', () => {
+            if (id !== this.selectedId) layer.setStyle(DEFAULT_STYLE)
+          })
+          const path = layer.getElement()
+          if (path) {
+            path.setAttribute('tabindex', '0')
+            path.setAttribute('role', 'button')
+            path.setAttribute('aria-label', `Select HDB block ${typedFeature.properties.block_number ?? 'number unavailable'}`)
+            path.addEventListener('keydown', (event: Event) => {
+              const keyEvent = event as KeyboardEvent
+              if (keyEvent.key !== 'Enter' && keyEvent.key !== ' ') return
+              event.preventDefault()
+              event.stopPropagation()
+              this.selectFeature(typedFeature)
+            })
+          }
+        },
+      }).addTo(this.map)
+
+      const bounds = this.geoJsonLayer.getBounds()
+      if (bounds.isValid()) this.map.fitBounds(bounds.pad(0.12), { maxZoom: 16, animate: false })
+      this.onBuildingsLoaded(parsed.collection.features.map(toBuildingMetadata))
+      const skipped = parsed.skippedFeatureCount
       this.onState({
         status: 'ready',
-        message:
-          parsed.skippedFeatureCount > 0
-            ? `${parsed.skippedFeatureCount} invalid feature(s) were ignored; valid HDB footprints are shown.`
-            : 'HDB footprints loaded. Select a building to inspect its available identifiers.',
+        message: skipped > 0
+          ? `${skipped} invalid feature(s) were ignored; valid HDB footprints are shown.`
+          : 'HDB footprints loaded. Select a building to view its identifiers.',
         featureCount: parsed.collection.features.length,
-        skippedFeatureCount: parsed.skippedFeatureCount,
+        skippedFeatureCount: skipped,
       })
     } catch (error) {
       this.onState({
         status: 'error',
-        message: `Could not add the prepared HDB layer to the map. ${error instanceof Error ? error.message : ''}`.trim(),
+        message: `Could not draw the prepared HDB footprints. ${error instanceof Error ? error.message : ''}`.trim(),
         featureCount: 0,
         skippedFeatureCount: parsed.skippedFeatureCount,
       })
     }
   }
 
-  dispose(): void {
-    this.disposed = true
-    if (this.listenersAttached) {
-      this.map.off('click', LAYER_ID, this.handleBuildingClick)
-      this.map.off('mousemove', LAYER_ID, this.handleBuildingMouseMove)
-      this.map.off('mouseleave', LAYER_ID, this.handleBuildingMouseLeave)
-      this.map.off('click', this.handleMapClick)
-      this.listenersAttached = false
-    }
-    this.map.getCanvas().style.cursor = ''
-    if (this.map.getLayer(LAYER_ID)) this.map.removeLayer(LAYER_ID)
-    if (this.map.getSource(SOURCE_ID)) this.map.removeSource(SOURCE_ID)
+  fitToData(): void {
+    const bounds = this.geoJsonLayer?.getBounds()
+    if (bounds?.isValid()) this.map.fitBounds(bounds.pad(0.12), { maxZoom: 16, animate: true, duration: 0.45 })
   }
 
-  private attachListeners(): void {
-    if (this.listenersAttached) return
-    this.map.on('click', LAYER_ID, this.handleBuildingClick)
-    this.map.on('mousemove', LAYER_ID, this.handleBuildingMouseMove)
-    this.map.on('mouseleave', LAYER_ID, this.handleBuildingMouseLeave)
-    this.map.on('click', this.handleMapClick)
-    this.listenersAttached = true
-  }
-
-  private fitToDemoArea(collection: BuildingFeatureCollection): void {
-    const coordinates = collection.features.flatMap((feature) => {
-      const geometry = feature.geometry
-      const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates
-      return polygons.flatMap((polygon) => polygon.flatMap((ring) => ring.map(([longitude, latitude]) => [longitude, latitude] as [number, number])))
-    })
-    if (coordinates.length === 0) return
-    let west = Number.POSITIVE_INFINITY
-    let south = Number.POSITIVE_INFINITY
-    let east = Number.NEGATIVE_INFINITY
-    let north = Number.NEGATIVE_INFINITY
-    for (const [longitude, latitude] of coordinates) {
-      west = Math.min(west, longitude)
-      south = Math.min(south, latitude)
-      east = Math.max(east, longitude)
-      north = Math.max(north, latitude)
-    }
-    this.map.fitBounds([[west, south], [east, north]], {
-      padding: MAP_PADDING,
-      maxZoom: 15,
-      duration: 650,
-    })
-  }
-
-  private setFeatureState(id: string, state: Record<string, boolean>): void {
-    if (!this.map.getSource(SOURCE_ID)) return
-    this.map.setFeatureState({ source: SOURCE_ID, id }, state)
-  }
-
-  private selectFeature(feature: BuildingFeature): void {
-    const nextId = getFeatureId(feature)
-    if (!nextId) return
-    if (this.selectedId && this.selectedId !== nextId) {
-      this.setFeatureState(this.selectedId, { selected: false })
-    }
-    this.selectedId = nextId
-    this.setFeatureState(nextId, { selected: true })
-    this.onSelect(toBuildingMetadata(feature))
-    this.map.flyTo({
-      center: [feature.properties.longitude, feature.properties.latitude],
-      zoom: 16.5,
-      pitch: 52,
-      duration: 900,
-    })
-  }
-
-  private clearSelection(): void {
-    if (this.selectedId) this.setFeatureState(this.selectedId, { selected: false })
+  clearSelection(): void {
+    if (!this.selectedId) return
+    this.featureLayers.get(this.selectedId)?.setStyle(DEFAULT_STYLE)
     this.selectedId = null
     this.onSelect(null)
   }
 
-  private readonly handleBuildingClick = (event: MapLayerMouseEvent): void => {
-    const feature = event.features?.[0] as BuildingFeature | undefined
-    if (feature) this.selectFeature(feature)
+  selectBuilding(buildingId: string): void {
+    const building = this.featuresById.get(buildingId)
+    if (!building) return
+    if (this.selectedId !== buildingId) this.selectFeature(building)
+    const bounds = this.featureBoundsById.get(buildingId)
+    if (bounds?.isValid()) this.map.fitBounds(bounds.pad(0.3), { maxZoom: 18, animate: true, duration: 0.45 })
   }
 
-  private readonly handleBuildingMouseMove = (event: MapLayerMouseEvent): void => {
-    const feature = event.features?.[0] as BuildingFeature | undefined
-    const nextId = getFeatureId(feature)
-    this.map.getCanvas().style.cursor = nextId ? 'pointer' : ''
-    if (!nextId || nextId === this.hoveredId) return
-    if (this.hoveredId && this.hoveredId !== this.selectedId) {
-      this.setFeatureState(this.hoveredId, { hovered: false })
-    }
-    this.hoveredId = nextId
-    this.setFeatureState(nextId, { hovered: true })
+  dispose(): void {
+    this.disposed = true
+    this.geoJsonLayer?.remove()
+    this.geoJsonLayer = null
+    this.featureLayers.clear()
+    this.featuresById.clear()
+    this.featureBoundsById.clear()
   }
 
-  private readonly handleBuildingMouseLeave = (): void => {
-    this.map.getCanvas().style.cursor = ''
-    if (this.hoveredId && this.hoveredId !== this.selectedId) {
-      this.setFeatureState(this.hoveredId, { hovered: false })
-    }
-    this.hoveredId = null
-  }
-
-  private readonly handleMapClick = (event: MapMouseEvent): void => {
-    const hit = this.map.queryRenderedFeatures(event.point, { layers: [LAYER_ID] })
-    if (hit.length === 0) this.clearSelection()
+  private selectFeature(feature: BuildingFeature): void {
+    if (this.selectedId) this.featureLayers.get(this.selectedId)?.setStyle(DEFAULT_STYLE)
+    const id = feature.properties.building_id
+    this.selectedId = id
+    this.featureLayers.get(id)?.setStyle(SELECTED_STYLE)
+    this.onSelect(toBuildingMetadata(feature))
   }
 }
