@@ -1,36 +1,30 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Existing local inputs and prompt notes are intentionally kept out of Git.
+/prompt
+/data
 
-# dependencies
+# Dependencies and build output
 /node_modules
 /.pnp
 .pnp.js
-
-# testing
+/dist
 /coverage
 
-# next.js
-/.next/
-/out/
+# Environment files (keep checked-in examples such as .env.example if added)
+.env
+.env.*
+!.env.example
 
-# production
-/build
+# Python offline-processing artifacts
+__pycache__/
+*.py[cod]
+.venv/
+venv/
 
-# misc
+# Editor, OS and logs
 .DS_Store
 *.pem
-
-# debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# local env files
-.env*.local
-.env
-
-# vercel
-.vercel
-
-# typescript
 *.tsbuildinfo
-next-env.d.ts
+.codex

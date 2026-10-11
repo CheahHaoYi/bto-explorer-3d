@@ -1,0 +1,4 @@
+interface:
+  display_name: "Submit"
+  short_description: "Draft your Common Ground entry from project context"
+  default_prompt: "Use $submit to draft our Common Ground project submission, asking only for details you do not already know."

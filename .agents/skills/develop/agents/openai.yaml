@@ -1,0 +1,4 @@
+interface:
+  display_name: "Develop"
+  short_description: "Build and try the experience from your project Page"
+  default_prompt: "Use $develop with my corrected project Page to plan and build a greybox prototype."

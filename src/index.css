@@ -1,0 +1,328 @@
+@import "tailwindcss";
+
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #222b2a;
+  background: #f7f8f6;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 320px;
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app-header {
+  height: 76px;
+}
+
+.workspace {
+  height: calc(100svh - 76px);
+}
+
+.mobile-details-panel {
+  display: none;
+}
+
+.maplibregl-map {
+  width: 100%;
+  height: 100%;
+  font-family: inherit;
+}
+
+.maplibregl-ctrl-bottom-right {
+  right: 14px !important;
+  bottom: 12px !important;
+}
+
+.maplibregl-ctrl-attrib {
+  border: 1px solid rgba(224, 230, 223, 0.9) !important;
+  border-radius: 8px 0 0 0;
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: #637069 !important;
+  font-size: 9px !important;
+  box-shadow: 0 2px 8px rgba(32, 45, 38, 0.07);
+  backdrop-filter: blur(8px);
+}
+
+.maplibregl-ctrl-attrib a {
+  color: #52665a !important;
+}
+
+.map-control-button {
+  display: flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  color: #5c6961;
+  transition: color 140ms ease, background-color 140ms ease;
+}
+
+.map-control-button:hover {
+  background-color: #f3f6f1;
+  color: #3b5a46;
+}
+
+.map-control-button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid #476b52;
+  outline-offset: -3px;
+}
+
+.map-control-divider {
+  height: 1px;
+  margin: 0 9px;
+  background: #edf0eb;
+}
+
+.reset-control {
+  width: 42px;
+  height: 42px;
+}
+
+.reset-north {
+  display: flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #738078;
+  border-radius: 50%;
+  color: #53625a;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.map-loading {
+  position: absolute;
+  z-index: 5;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(229, 234, 227, 0.9);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 10px 15px;
+  color: #66736b;
+  font-size: 12px;
+  box-shadow: 0 5px 20px rgba(39, 56, 44, 0.09);
+}
+
+.details-scroll {
+  scrollbar-color: #dce3dc transparent;
+  scrollbar-width: thin;
+}
+
+.mobile-explore-link {
+  display: none;
+}
+
+@media (max-width: 800px) {
+  .app-header {
+    height: auto;
+    min-height: 68px;
+    flex-wrap: wrap;
+    gap: 0;
+    padding: 10px 18px 13px;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+  }
+
+  .brand-subtitle {
+    font-size: 9px;
+  }
+
+  .header-actions {
+    margin-left: auto;
+  }
+
+  .project-search {
+    order: 3;
+    max-width: none;
+    height: 40px;
+    margin-top: 10px;
+  }
+
+  .workspace {
+    height: auto;
+  }
+
+  .desktop-sidebar {
+    display: none;
+  }
+
+  .map-context {
+    left: 16px;
+    top: 16px;
+  }
+
+  .map-context-card {
+    padding: 10px 12px;
+  }
+
+  .map-context-card > p:last-child {
+    margin-top: 4px;
+    font-size: 13px;
+  }
+
+  .map-control-stack {
+    right: 14px;
+    top: 14px;
+    gap: 7px;
+  }
+
+  .map-control-button,
+  .reset-control {
+    width: 40px;
+    height: 40px;
+  }
+
+  .mobile-details-panel {
+    position: absolute;
+    z-index: 12;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    display: block;
+    max-height: min(74%, 620px);
+    overflow: hidden;
+    border: 1px solid rgba(228, 233, 226, 0.96);
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.97);
+    padding: 12px 16px;
+    box-shadow: 0 12px 38px rgba(32, 45, 38, 0.16);
+    backdrop-filter: blur(16px);
+    transition: max-height 180ms ease;
+  }
+
+  .mobile-details-panel.is-expanded {
+    max-height: min(74%, 620px);
+    overflow-y: auto;
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+  }
+
+  .mobile-panel-toggle {
+    min-height: 48px;
+    border: 0;
+    background: transparent;
+    padding: 0;
+  }
+
+  .mobile-panel-toggle:focus-visible {
+    outline: 2px solid #476b52;
+    outline-offset: 3px;
+    border-radius: 10px;
+  }
+
+  .mobile-panel-toggle .rotate-180 {
+    transition: transform 150ms ease;
+  }
+
+  .mobile-panel-content {
+    padding-top: 10px;
+  }
+
+  .mobile-panel-content[hidden] {
+    display: none;
+  }
+
+  .mobile-panel-content .details-content {
+    display: block;
+  }
+
+  .mobile-panel-content .details-heading {
+    display: none;
+  }
+
+  .mobile-panel-content .details-scroll {
+    display: flex;
+    overflow: visible;
+    padding: 0 0 10px;
+  }
+
+  .mobile-explore-link {
+    display: inline-flex;
+    padding: 2px 0 3px;
+  }
+
+  .maplibregl-ctrl-bottom-right {
+    right: 11px !important;
+    bottom: 83px !important;
+  }
+
+  .workspace:has(.mobile-details-panel.is-expanded) .maplibregl-ctrl-bottom-right {
+    bottom: calc(74% + 12px) !important;
+  }
+}
+
+@media (max-width: 400px) {
+  .app-header {
+    padding-right: 13px;
+    padding-left: 13px;
+  }
+
+  .brand-lockup {
+    gap: 8px;
+  }
+
+  .brand-mark {
+    width: 33px;
+    height: 33px;
+  }
+
+  .help-button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .map-context-card {
+    max-width: 130px;
+  }
+
+  .map-control-stack {
+    right: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

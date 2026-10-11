@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design"
+  short_description: "Find and apply the prototype's aesthetic direction"
+  default_prompt: "Use $design with my project Page and prototype to refine and apply an aesthetic direction."

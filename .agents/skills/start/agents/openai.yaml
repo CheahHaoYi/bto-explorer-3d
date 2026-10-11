@@ -1,0 +1,4 @@
+interface:
+  display_name: "Start"
+  short_description: "Turn a hackathon idea into a shared project brief"
+  default_prompt: "Use $start to help me explore my hackathon idea and write a project brief in Pages."
