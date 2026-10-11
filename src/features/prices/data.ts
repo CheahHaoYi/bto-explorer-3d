@@ -10,7 +10,15 @@ export interface BlockPriceHistory {
   streetName: string
   transactionCount: number
   overallHistory: AnnualPricePoint[]
+  floorBandHistory: Record<string, FloorBandPriceHistory>
   flatTypeHistory: Record<string, AnnualPricePoint[]>
+}
+
+/** Statistics for an observed source storey_range band, never a single floor. */
+export interface FloorBandPriceHistory {
+  transactionCount: number
+  medianSgd: number
+  history: AnnualPricePoint[]
 }
 
 export interface ResaleHistoryDataset {
@@ -42,7 +50,7 @@ function parseHistory(value: unknown, label: string): AnnualPricePoint[] {
 }
 
 export function parseResaleHistory(payload: unknown): ResaleHistoryDataset {
-  if (!isRecord(payload) || payload.schemaVersion !== 1 || !isRecord(payload.metadata) || !isRecord(payload.metadata.source) ||
+  if (!isRecord(payload) || payload.schemaVersion !== 2 || !isRecord(payload.metadata) || !isRecord(payload.metadata.source) ||
       !isRecord(payload.metadata.streetCodeCrosswalk) || !isRecord(payload.metadata.counts) ||
       !Array.isArray(payload.addresses) || !Array.isArray(payload.buildingMatches)) {
     throw new Error('Resale history data has an unsupported or invalid format.')
@@ -60,7 +68,7 @@ export function parseResaleHistory(payload: unknown): ResaleHistoryDataset {
   for (const raw of payload.addresses) {
     if (!isRecord(raw) || typeof raw.key !== 'string' || typeof raw.blockNumber !== 'string' ||
         typeof raw.streetName !== 'string' || !Number.isInteger(raw.transactionCount) || (raw.transactionCount as number) < 1 ||
-        !isRecord(raw.flatTypeHistory) || addressesByKey.has(raw.key)) {
+        !isRecord(raw.flatTypeHistory) || !isRecord(raw.floorBandHistory) || addressesByKey.has(raw.key)) {
       throw new Error('Resale history data contains an invalid or duplicate block/street record.')
     }
     const expectedKey = `${raw.blockNumber}|${raw.streetName}`
@@ -72,6 +80,29 @@ export function parseResaleHistory(payload: unknown): ResaleHistoryDataset {
     }
     const overallHistory = parseHistory(raw.overallHistory, `${raw.key} overall`)
     const transactionCount = raw.transactionCount as number
+    const floorBandHistory: Record<string, FloorBandPriceHistory> = {}
+    let floorBandTransactionTotal = 0
+    for (const [band, rawBand] of Object.entries(raw.floorBandHistory)) {
+      const match = /^(\d{2}) TO (\d{2})$/.exec(band)
+      if (!match || Number(match[1]) > Number(match[2]) || !isRecord(rawBand) ||
+          !Number.isInteger(rawBand.transactionCount) || (rawBand.transactionCount as number) < 1 ||
+          !Number.isFinite(rawBand.medianSgd) || (rawBand.medianSgd as number) < 0) {
+        throw new Error(`Resale history contains an invalid storey-range band for ${raw.key}.`)
+      }
+      const bandHistory = parseHistory(rawBand.history, `${raw.key} ${band}`)
+      if (bandHistory.reduce((sum, point) => sum + point.count, 0) !== rawBand.transactionCount) {
+        throw new Error(`Resale history transaction total does not match ${raw.key} ${band}.`)
+      }
+      floorBandTransactionTotal += rawBand.transactionCount as number
+      floorBandHistory[band] = {
+        transactionCount: rawBand.transactionCount as number,
+        medianSgd: rawBand.medianSgd as number,
+        history: bandHistory,
+      }
+    }
+    if (floorBandTransactionTotal !== transactionCount) {
+      throw new Error(`Resale history storey-range totals do not match ${raw.key}.`)
+    }
     if (overallHistory.reduce((sum, point) => sum + point.count, 0) !== transactionCount) {
       throw new Error(`Resale history transaction total does not match ${raw.key}.`)
     }
@@ -84,6 +115,7 @@ export function parseResaleHistory(payload: unknown): ResaleHistoryDataset {
       streetName: raw.streetName,
       transactionCount,
       overallHistory,
+      floorBandHistory,
       flatTypeHistory,
     })
   }
@@ -100,6 +132,17 @@ export function parseResaleHistory(payload: unknown): ResaleHistoryDataset {
   }
 
   return { addressesByKey, addressKeyByBuilding }
+}
+
+/** Return every observed source band that includes the requested floor. Bands can overlap. */
+export function findFloorBandPrices(block: BlockPriceHistory, floorLevel: number): Array<FloorBandPriceHistory & { range: string }> {
+  if (!Number.isInteger(floorLevel) || floorLevel < 1) return []
+  return Object.entries(block.floorBandHistory)
+    .filter(([range]) => {
+      const match = /^(\d{2}) TO (\d{2})$/.exec(range)
+      return Boolean(match && floorLevel >= Number(match[1]) && floorLevel <= Number(match[2]))
+    })
+    .map(([range, statistics]) => ({ range, ...statistics }))
 }
 
 export async function loadResaleHistory(): Promise<ResaleHistoryDataset> {

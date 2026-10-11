@@ -1,6 +1,6 @@
 # BTO Explorer 3D
 
-A map-first application for exploring Singapore HDB and BTO developments. The MVP uses Leaflet's 2D map renderer with OpenStreetMap raster tiles, HDB under-construction footprints, URA planning regions, and a searchable existing-HDB list. No WebGL is used.
+A map-first application for exploring Singapore HDB and BTO developments. The map uses Leaflet's 2D renderer with OpenStreetMap raster tiles, HDB footprints, URA planning regions, and searchable block details. Selected existing HDB blocks can also open a rotatable SVG massing view built from their GeoJSON footprints and source floor counts. No WebGL is used.
 
 ## Run locally
 
@@ -18,9 +18,9 @@ npm run build
 npm run preview
 ```
 
-The production build is a static site in `dist/`. Leaflet loads OpenStreetMap raster tiles over the network and shows the required attribution. Under-construction footprints and the regional HDB index are bundled as static assets; local map data remains available if the tile service is unavailable.
+The production build is a static site in `dist/`. Leaflet loads OpenStreetMap raster tiles over the network and shows the required attribution. Under-construction footprints and the regional HDB index are bundled as static assets; selected-region HDB footprint geometry is lazy-loaded only when the 3D viewer opens. Local map data remains available if the tile service is unavailable.
 
-Drag to pan, scroll or pinch to zoom, and use the zoom buttons. The initial map shows all five URA regions with softly tinted fills. Click a region on the map or choose it in the region picker to show selectable pins for its HDB blocks. Select a pin or a row in the block list to open focused block details. The sidebar shows source-backed completion year, maximum floor level, dwelling-unit totals and mix, property-use flags, and historical resale prices where matched; metre height is unavailable in the supplied sources. Use **Whole map** to return to the Singapore overview or **Select region** to switch regions. The fit control returns to the current regional view or overview. Choose an under-construction block from the header dropdown or click one of its footprints to inspect its source identifiers. Region membership is derived from each valid existing-HDB footprint's representative point; the region boundaries are indicative planning boundaries. The source contains building blocks, not named BTO project boundaries. This MVP is a flat 2D map with no 3D extrusion.
+Drag to pan, scroll or pinch to zoom, and use the zoom buttons. The initial map shows all five URA regions with softly tinted fills and no sidebar. Click a region on the map or choose it in the region picker to show selectable pins for its HDB blocks. Select a pin to open focused block details. Where a source floor count and source footprint are available, use **Show 3D rendering** to open a rotatable footprint extrusion. Hover or focus a floor to see matched resale observations by their reported storey-range bands. The sidebar shows completion year, maximum floor level, dwelling-unit totals and mix, property-use flags, and historical resale prices where matched; metre height is unavailable in the supplied sources. Use **Whole map** to return to the Singapore overview or **Back to region** to return to region pins. The fit control returns to the current regional view or overview. Choose an under-construction block from the header dropdown or click one of its footprints to inspect its source identifiers. Region membership is derived from each valid existing-HDB footprint's representative point; the region boundaries are indicative planning boundaries. The source contains building blocks, not named BTO project boundaries. The Leaflet map stays 2D; the selected-block massing view uses SVG and does not use WebGL.
 
 ## Prepare the HDB demo data
 
@@ -48,13 +48,14 @@ Prepare the region and existing-HDB index with:
 .venv/bin/python scripts/prepare_region_hdb_index.py
 ```
 
-It reads HDB Existing Building, HDB Property Information, and URA Master Plan 2025 region-boundary sources under `data/raw/`, and writes enriched block records and regional outlines to `public/data/regions/hdb-by-region.json`.
+It reads HDB Existing Building, HDB Property Information, and URA Master Plan 2025 region-boundary sources under `data/raw/`, and writes enriched block records and regional outlines to `public/data/regions/hdb-by-region.json`. It also writes five per-region HDB footprint GeoJSON assets under `public/data/regions/footprints/`; these are fetched only when opening a selected block's 3D view.
 
 ## Project structure
 
 - `src/app/` — application shell and responsive layout.
 - `src/features/map/` — Leaflet lifecycle, regional overview, HDB block pins and selection.
 - `src/features/buildings/` — building metadata types and details panel.
+- `src/features/building-model/` — lazy GeoJSON footprint loading and rotatable SVG massing view.
 - `src/features/regions/` — runtime validation and searchable HDB-by-region browser.
 - `src/features/projects/` — HDB block selector (source blocks are not named projects).
 - `src/features/prices/` — historical resale-price data and block-level summaries.
@@ -72,4 +73,4 @@ Static assets in `public/` must be referenced with `import.meta.env.BASE_URL` so
 
 ## Scope and data
 
-The current MVP covers a navigable 2D basemap, selectable under-construction HDB footprints, 2025 planning-region boundaries, HDB block pins, joined property information and historical resale analytics. It has no named-project grouping, backend, database, 3D rendering or verified metre-height data. Raw inputs under `data/` remain ignored by Git; derived assets under `public/data/` are served to the browser.
+The current MVP covers a navigable 2D basemap, selectable under-construction HDB footprints, 2025 planning-region boundaries, HDB block pins, joined property information, historical resale analytics, and an on-demand source-footprint extrusion for eligible existing HDB blocks. It has no named-project grouping, backend, database, architectural 3D model, or verified metre-height data. Raw inputs under `data/` remain ignored by Git; derived assets under `public/data/` are served to the browser.

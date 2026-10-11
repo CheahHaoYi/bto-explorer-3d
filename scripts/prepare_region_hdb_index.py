@@ -10,14 +10,20 @@ import math
 from pathlib import Path
 from typing import Any
 
-from shapely import get_coordinates
+from pyproj import CRS, Transformer
+from shapely import get_coordinates, transform as transform_geometry
 from shapely.geometry import mapping, shape
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_HDB_INPUT = ROOT / "data/raw/HDBExistingBuilding.geojson"
 DEFAULT_REGION_INPUT = ROOT / "data/raw/MasterPlan2025RegionBoundaryNoSea.geojson"
 DEFAULT_OUTPUT = ROOT / "public/data/regions/hdb-by-region.json"
+DEFAULT_FOOTPRINTS_OUTPUT_DIR = ROOT / "public/data/regions/footprints"
 DEFAULT_PROPERTIES_INPUT = ROOT / "data/raw/HDBPropertyInformation.csv"
+SOURCE_CRS = CRS.from_epsg(4326)
+METRIC_CRS = CRS.from_epsg(3414)
+TO_METRIC = Transformer.from_crs(SOURCE_CRS, METRIC_CRS, always_xy=True)
+TO_WGS84 = Transformer.from_crs(METRIC_CRS, SOURCE_CRS, always_xy=True)
 
 HDB_SOURCE_NAME = "HDB Existing Building — Housing & Development Board"
 HDB_SOURCE_URL = "https://data.gov.sg/datasets/d_16b157c52ed637edd6ba1232e026258d/view"
@@ -178,7 +184,27 @@ def point_is_finite(point: Any) -> bool:
     return math.isfinite(float(point.x)) and math.isfinite(float(point.y))
 
 
-def prepare(hdb_path: Path, region_path: Path, properties_path: Path) -> dict[str, Any]:
+def polygon_component_count(geometry: Any) -> int:
+    return len(geometry.geoms) if geometry.geom_type == "MultiPolygon" else 1
+
+
+def simplify_footprint(geometry: Any, tolerance_m: float) -> tuple[Any, bool]:
+    if tolerance_m <= 0:
+        return geometry, False
+    projected = transform_geometry(geometry, TO_METRIC.transform, interleaved=False)
+    simplified = projected.simplify(tolerance_m, preserve_topology=True)
+    if (simplified.is_empty or not simplified.is_valid or simplified.geom_type != geometry.geom_type or
+            polygon_component_count(simplified) != polygon_component_count(geometry) or projected.area <= 0):
+        return geometry, False
+    if abs(simplified.area - projected.area) / projected.area > 0.01:
+        return geometry, False
+    output = transform_geometry(simplified, TO_WGS84.transform, interleaved=False)
+    if output.is_empty or not output.is_valid or output.geom_type != geometry.geom_type or not finite_geometry(output):
+        return geometry, False
+    return output, True
+
+
+def prepare(hdb_path: Path, region_path: Path, properties_path: Path, simplify_tolerance_m: float = 0.5) -> dict[str, Any]:
     hdb_source = load_collection(hdb_path, "HDB Existing Building")
     region_source = load_collection(region_path, "Master Plan region boundary")
     property_records, property_counts = load_property_records(properties_path)
@@ -206,12 +232,14 @@ def prepare(hdb_path: Path, region_path: Path, properties_path: Path) -> dict[st
             "geometry": mapping(geometry),
             "_shape": geometry,
             "buildings": [],
+            "footprints": [],
         }
     if not regions:
         raise ValueError("No region polygons were found.")
 
     skipped_invalid = 0
     skipped_unassigned = 0
+    simplified_count = 0
     seen_ids: set[str] = set()
     for feature in hdb_source["features"]:
         if not isinstance(feature, dict) or not isinstance(feature.get("properties"), dict):
@@ -253,7 +281,9 @@ def prepare(hdb_path: Path, region_path: Path, properties_path: Path) -> dict[st
             (str(street_code or "").strip().upper(), str(block_number).strip().upper()),
             unavailable_enrichment(),
         )
-        matches[0]["buildings"].append({
+        display_geometry, was_simplified = simplify_footprint(geometry, simplify_tolerance_m)
+        region = matches[0]
+        region["buildings"].append({
             "buildingId": building_id,
             "blockNumber": str(block_number).strip(),
             "postalCode": str(postal_code).strip(),
@@ -262,6 +292,16 @@ def prepare(hdb_path: Path, region_path: Path, properties_path: Path) -> dict[st
             "latitude": representative_point.y,
             **enrichment,
         })
+        region["footprints"].append({
+            "type": "Feature",
+            "id": building_id,
+            "properties": {
+                "building_id": building_id,
+                "block_number": str(block_number).strip(),
+            },
+            "geometry": mapping(display_geometry),
+        })
+        simplified_count += int(was_simplified)
 
     for region in regions.values():
         region["buildings"].sort(key=lambda building: (
@@ -313,7 +353,31 @@ def prepare(hdb_path: Path, region_path: Path, properties_path: Path) -> dict[st
             "buildingCount": len(region["buildings"]),
             "buildings": region["buildings"],
         })
-    return {"schemaVersion": 1, "metadata": metadata, "regions": output_regions}
+    footprint_collections = {
+        code: {
+            "type": "FeatureCollection",
+            "name": f"HDB existing-building source footprints · {region['name']}",
+            "metadata": {
+                "source": HDB_SOURCE_NAME,
+                "source_url": HDB_SOURCE_URL,
+                "snapshot_date": None,
+                "region_code": code,
+                "region_name": region["name"],
+                "feature_count": len(region["footprints"]),
+                "crs_assumption": "WGS 84 longitude/latitude (RFC 7946), inferred from GeoJSON coordinates and Singapore bounds; source does not declare a CRS.",
+                "geometry_note": "No geometry repair is performed. A simplified display shape is used only when topology and component count are preserved and area change is at most 1%; otherwise the source shape is retained.",
+                "simplification": {
+                    "method": "Topology-preserving Douglas-Peucker in EPSG:3414; use the simplified shape only if geometry type and component count are preserved and area change is at most 1%; otherwise retain the source shape.",
+                    "tolerance_m": simplify_tolerance_m,
+                    "simplified_feature_count": simplified_count,
+                    "crs": "EPSG:3414 (SVY21 metres)",
+                },
+            },
+            "features": sorted(region["footprints"], key=lambda feature: feature["id"]),
+        }
+        for code, region in regions.items()
+    }
+    return {"schemaVersion": 1, "metadata": metadata, "regions": output_regions, "footprintCollections": footprint_collections}
 
 
 def main() -> int:
@@ -322,17 +386,29 @@ def main() -> int:
     parser.add_argument("--region-input", type=Path, default=DEFAULT_REGION_INPUT)
     parser.add_argument("--properties-input", type=Path, default=DEFAULT_PROPERTIES_INPUT)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--footprints-output-dir", type=Path, default=DEFAULT_FOOTPRINTS_OUTPUT_DIR)
+    parser.add_argument("--simplify-tolerance-m", type=float, default=0.5)
     args = parser.parse_args()
+    if not math.isfinite(args.simplify_tolerance_m) or args.simplify_tolerance_m < 0 or args.simplify_tolerance_m > 10:
+        parser.error("--simplify-tolerance-m must be between 0 and 10 metres")
     try:
-        prepared = prepare(args.hdb_input, args.region_input, args.properties_input)
+        prepared = prepare(args.hdb_input, args.region_input, args.properties_input, args.simplify_tolerance_m)
     except (OSError, json.JSONDecodeError, ValueError) as error:
         parser.error(str(error))
 
+    footprint_collections = prepared.pop("footprintCollections")
     serialized = json.dumps(prepared, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = args.output.with_suffix(args.output.suffix + ".tmp")
     temporary_path.write_text(serialized, encoding="utf-8")
     temporary_path.replace(args.output)
+    args.footprints_output_dir.mkdir(parents=True, exist_ok=True)
+    for code, collection in footprint_collections.items():
+        footprint_output = args.footprints_output_dir / f"{code.lower()}.geojson"
+        footprint_serialized = json.dumps(collection, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        footprint_temporary = footprint_output.with_suffix(footprint_output.suffix + ".tmp")
+        footprint_temporary.write_text(footprint_serialized, encoding="utf-8")
+        footprint_temporary.replace(footprint_output)
     counts = prepared["metadata"]["counts"]
     print(
         f"Prepared {counts['validAssignedHdbFeatures']:,} HDB footprints across "
@@ -340,6 +416,7 @@ def main() -> int:
         f"{counts['skippedUnassignedOrAmbiguousHdbFeatures']} unassigned/ambiguous records."
     )
     print(f"Output: {args.output} ({args.output.stat().st_size:,} bytes)")
+    print(f"Region footprint GeoJSON written to {args.footprints_output_dir}")
     print(f"Property-enriched existing HDB records: {prepared['metadata']['propertyInformationSource']['counts']['matchedExistingBuildingRecords']:,}")
     return 0
 

@@ -3,11 +3,13 @@ import type { BuildingLayerState, BuildingMetadata } from './types'
 import type { RegionalHdbRecord } from '../regions/types'
 import type { BlockPriceHistory } from '../prices/data'
 import { PriceHistoryPanel } from '../prices/PriceHistoryPanel'
+import { BuildingModelExperience } from '../building-model/BuildingModelExperience'
 
 type BuildingDetailsPanelProps = {
   compact?: boolean
   building: BuildingMetadata | null
   regionalBuilding?: RegionalHdbRecord | null
+  regionCode?: string | null
   regionName?: string | null
   dataState: BuildingLayerState
   resaleHistory: BlockPriceHistory | null
@@ -26,7 +28,7 @@ const PROPERTY_FLAGS: Array<[keyof RegionalHdbRecord['propertyFlags'], string]> 
   ['miscellaneous', 'Miscellaneous'], ['multistoreyCarpark', 'Multistorey car park'], ['precinctPavilion', 'Precinct pavilion'],
 ]
 
-export function BuildingDetailsPanel({ compact = false, building, regionalBuilding = null, regionName = null, dataState, resaleHistory, resaleStatus, resaleError }: BuildingDetailsPanelProps) {
+export function BuildingDetailsPanel({ compact = false, building, regionalBuilding = null, regionCode = null, regionName = null, dataState, resaleHistory, resaleStatus, resaleError }: BuildingDetailsPanelProps) {
   const selected = building ?? regionalBuilding
   const blockNumber = building?.blockNumber ?? regionalBuilding?.blockNumber ?? null
   const postalCode = building?.postalCode ?? regionalBuilding?.postalCode ?? null
@@ -107,6 +109,12 @@ export function BuildingDetailsPanel({ compact = false, building, regionalBuildi
             </>
           )}
         </section>
+
+        <BuildingModelExperience
+          building={regionalBuilding}
+          regionCode={regionCode}
+          floorBandHistory={resaleHistory?.floorBandHistory ?? null}
+        />
 
         {regionalBuilding && <section className="rounded-2xl border border-[#e7ebe5] bg-white p-5 shadow-[0_2px_8px_rgba(37,50,42,0.025)]" aria-labelledby="hdb-profile-title">
           <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#89928d]">HDB Property Information</p>

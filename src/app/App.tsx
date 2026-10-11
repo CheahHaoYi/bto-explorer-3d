@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
-import { ArrowUpRight, ChevronDown, Command, Search, Sparkles } from 'lucide-react'
+import { ChevronDown, ChevronLeft, Command, Map, Search, Sparkles } from 'lucide-react'
 import { BuildingDetailsPanel } from '../features/buildings/BuildingDetailsPanel'
 import { INITIAL_BUILDING_LAYER_STATE, type BuildingLayerState, type BuildingMetadata } from '../features/buildings/types'
 import { MapView } from '../features/map/MapView'
 import { ProjectSearch } from '../features/projects/ProjectSearch'
 import { loadRegionDataset } from '../features/regions/data'
-import { RegionBrowser } from '../features/regions/RegionBrowser'
 import type { RegionRecord, RegionalHdbRecord } from '../features/regions/types'
 import { findBlockHistory, loadResaleHistory, type BlockPriceHistory } from '../features/prices/data'
 
@@ -15,8 +14,6 @@ export default function App() {
   const [availableBuildings, setAvailableBuildings] = useState<BuildingMetadata[]>([])
   const [buildingLayerState, setBuildingLayerState] = useState<BuildingLayerState>(INITIAL_BUILDING_LAYER_STATE)
   const [regions, setRegions] = useState<RegionRecord[]>([])
-  const [regionStatus, setRegionStatus] = useState<'loading' | 'ready' | 'error'>('loading')
-  const [regionError, setRegionError] = useState('')
   const [selectedRegionCode, setSelectedRegionCode] = useState<string | null>(null)
   const [selectedRegionalHdb, setSelectedRegionalHdb] = useState<{ regionCode: string; building: RegionalHdbRecord } | null>(null)
   const [resaleHistory, setResaleHistory] = useState<BlockPriceHistory | null>(null)
@@ -28,11 +25,9 @@ export default function App() {
     void loadRegionDataset().then((dataset) => {
       if (!active) return
       setRegions(dataset.regions)
-      setRegionStatus('ready')
-    }).catch((error: unknown) => {
+    }).catch(() => {
       if (!active) return
-      setRegionStatus('error')
-      setRegionError(error instanceof Error ? error.message : 'Could not load regional HDB data.')
+      setRegions([])
     })
     return () => { active = false }
   }, [])
@@ -67,7 +62,7 @@ export default function App() {
     setSelectedRegionCode(regionCode)
     setSelectedRegionalHdb(null)
     setSelectedBuilding(null)
-    if (regionCode) setDetailsExpanded(true)
+    setDetailsExpanded(false)
   }
 
   const selectRegionalHdb = (regionCode: string, building: RegionalHdbRecord) => {
@@ -76,6 +71,22 @@ export default function App() {
     setSelectedBuilding(null)
     setDetailsExpanded(true)
   }
+
+  const selectBuilding = (building: BuildingMetadata | null) => {
+    setSelectedBuilding(building)
+    if (building) {
+      setSelectedRegionalHdb(null)
+      setDetailsExpanded(true)
+    } else {
+      setDetailsExpanded(false)
+    }
+  }
+
+  const hasSelectedBlock = Boolean(selectedBuilding || selectedRegionalHdb)
+  const returnToRegion = () => {
+    if (selectedRegionCode) selectRegion(selectedRegionCode)
+  }
+  const returnToWholeMap = () => selectRegion(null)
 
   const selectedRegion = regions.find((region) => region.code === selectedRegionCode)
   const mobileDetailsSummary = selectedRegionalHdb
@@ -104,13 +115,7 @@ export default function App() {
         <ProjectSearch
           buildings={availableBuildings}
           selectedBuildingId={selectedBuilding?.buildingId ?? null}
-          onSelect={(buildingId) => {
-            if (!buildingId) setSelectedBuilding(null)
-            else {
-              setSelectedRegionalHdb(null)
-              setSelectedBuilding(availableBuildings.find((building) => building.buildingId === buildingId) ?? null)
-            }
-          }}
+          onSelect={(buildingId) => selectBuilding(buildingId ? availableBuildings.find((building) => building.buildingId === buildingId) ?? null : null)}
         />
 
         <div className="header-actions flex shrink-0 items-center gap-3">
@@ -135,7 +140,10 @@ export default function App() {
             onBuildingLayerState={setBuildingLayerState}
             onBuildingSelected={(building) => {
               setSelectedBuilding(building)
-              if (building) setSelectedRegionalHdb(null)
+              if (building) {
+                setSelectedRegionalHdb(null)
+                setDetailsExpanded(true)
+              }
             }}
             onBuildingsLoaded={setAvailableBuildings}
             onRegionSelected={selectRegion}
@@ -147,28 +155,28 @@ export default function App() {
           </div>
         </section>
 
-        <aside className="desktop-sidebar relative z-10 flex w-[364px] shrink-0 flex-col border-l border-[#e7eae5] bg-[#fbfcfa]">
-          <RegionBrowser
-            regions={regions}
-            status={regionStatus}
-            errorMessage={regionError}
-            selectedRegionCode={selectedRegionCode}
-            selectedBuildingId={selectedRegionalHdb?.building.buildingId ?? null}
-            onRegionSelected={selectRegion}
-            onBuildingSelected={selectRegionalHdb}
-          />
+        {hasSelectedBlock && <aside className="desktop-sidebar relative z-10 flex w-[364px] shrink-0 flex-col border-l border-[#e7eae5] bg-[#fbfcfa]" aria-label="Selected HDB block details">
+          <div className="flex shrink-0 items-center gap-2 border-b border-[#e7eae5] bg-white px-5 py-3">
+            {selectedRegionCode && <button className="sidebar-navigation-button" type="button" onClick={returnToRegion}>
+              <ChevronLeft size={14} aria-hidden="true" /> Back to {selectedRegion?.name ?? 'region'}
+            </button>}
+            <button className="sidebar-navigation-button" type="button" onClick={returnToWholeMap}>
+              <Map size={13} aria-hidden="true" /> Whole map
+            </button>
+          </div>
           <BuildingDetailsPanel
             building={selectedBuilding}
             regionalBuilding={selectedRegionalHdb?.building ?? null}
+            regionCode={selectedRegionalHdb?.regionCode ?? null}
             regionName={selectedRegion?.name ?? null}
             dataState={buildingLayerState}
             resaleHistory={resaleHistory}
             resaleStatus={resaleStatus}
             resaleError={resaleError}
           />
-        </aside>
+        </aside>}
 
-        <section className={`mobile-details-panel ${detailsExpanded ? 'is-expanded' : ''}`} aria-label="Property details">
+        {hasSelectedBlock && <section className={`mobile-details-panel ${detailsExpanded ? 'is-expanded' : ''}`} aria-label="Property details">
           <button
             className="mobile-panel-toggle flex w-full items-center justify-between text-left"
             type="button"
@@ -183,28 +191,23 @@ export default function App() {
             <span className="flex size-9 items-center justify-center rounded-full text-[#66716b] transition-transform" aria-hidden="true"><ChevronDown className={detailsExpanded ? 'rotate-180' : ''} size={18} /></span>
           </button>
           <div className="mobile-panel-content" id="mobile-property-content" hidden={!detailsExpanded}>
-            <RegionBrowser
-              regions={regions}
-              status={regionStatus}
-              errorMessage={regionError}
-              selectedRegionCode={selectedRegionCode}
-              selectedBuildingId={selectedRegionalHdb?.building.buildingId ?? null}
-              onRegionSelected={selectRegion}
-              onBuildingSelected={selectRegionalHdb}
-            />
+            <div className="mb-3 flex flex-wrap gap-2">
+              {selectedRegionCode && <button className="sidebar-navigation-button" type="button" onClick={returnToRegion}><ChevronLeft size={14} aria-hidden="true" /> Back to {selectedRegion?.name ?? 'region'}</button>}
+              <button className="sidebar-navigation-button" type="button" onClick={returnToWholeMap}><Map size={13} aria-hidden="true" /> Whole map</button>
+            </div>
             <BuildingDetailsPanel
               compact
               building={selectedBuilding}
               regionalBuilding={selectedRegionalHdb?.building ?? null}
+              regionCode={selectedRegionalHdb?.regionCode ?? null}
               regionName={selectedRegion?.name ?? null}
               dataState={buildingLayerState}
               resaleHistory={resaleHistory}
               resaleStatus={resaleStatus}
               resaleError={resaleError}
             />
-            <a className="mobile-explore-link inline-flex items-center gap-1.5 text-xs font-medium text-[#4d6b57]" href="#map-controls">Explore map controls <ArrowUpRight size={13} aria-hidden="true" /></a>
           </div>
-        </section>
+        </section>}
       </main>
     </div>
   )

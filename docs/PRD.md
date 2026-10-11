@@ -14,7 +14,7 @@
 
 ## 0. Executive summary
 
-**bto-explorer-3d** is a browser-based exploration and property intelligence tool for Singapore HDB and Build-To-Order (BTO) buyers. The current minimum viable application shows a navigable 2D map with under-construction HDB footprints, URA planning-region boundaries, and searchable lists of existing HDB blocks by region. Future capabilities must respect the user's no-WebGL constraint unless they explicitly change it.
+**bto-explorer-3d** is a browser-based exploration and property intelligence tool for Singapore HDB and Build-To-Order (BTO) buyers. The application shows a navigable Leaflet 2D map with under-construction HDB footprints, URA planning-region boundaries, and searchable lists of existing HDB blocks by region. Selected existing HDB blocks with source floor data can open an on-demand SVG extrusion based on the official GeoJSON footprint. The user has requested this focused 3D view; the map remains 2D and the no-WebGL constraint remains in effect.
 
 The product combines **map discovery + building visualization + spatial context + historical resale data** in one experience. Its long-term distinguishing feature is: **“Know your view before choosing your BTO unit.”** It must avoid claiming exact architectural dimensions, views, or individual property valuations when the source data does not support them.
 
@@ -221,8 +221,8 @@ Project → Block → Floor → Approximate external viewpoint
 | Style | **Tailwind CSS v4** | shadcn/ui only where helpful | Fast clean responsive UI. |
 | Icons | **lucide-react** | — | Lightweight standardized icons. |
 | Basemap | **Leaflet + OpenStreetMap raster tiles** | Another licensed raster provider if needed | Browser image/SVG rendering without WebGL or a map key. |
-| Building view | **Leaflet GeoJSON/SVG outlines** | Revisit only after explicit user direction | Keeps the map usable where WebGL is unavailable. |
-| 3D scenes | Not part of the current MVP | Requires a separate technical decision | The user's current project constraint is to avoid WebGL. |
+| Building view | **Leaflet GeoJSON/SVG outlines** plus an on-demand SVG footprint extrusion for eligible selected existing HDB blocks | Broader 3D scenes/models remain deferred | Keeps the map usable without WebGL while supporting the user-requested selected-block view. |
+| 3D scenes | Full architectural, neighborhood, and indoor scenes are not part of the current MVP; a source-footprint massing view is included | Verified plans, facade detail, and walkthroughs require separate data and scope | Current view uses actual HDB footprint and source floor count, with illustrative vertical spacing. |
 | ETL | **Python + Pandas + Shapely + pyproj** | GeoPandas, Polars, geometry optimization | Convert raw government data to compact static assets. |
 | Charts | Recharts when needed | — | Historical trends in selected building/area. |
 | Pricing | Descriptive medians | scikit-learn, backtests | Transparency before estimates. |
@@ -550,7 +550,7 @@ The hackathon demo is accepted only if:
 - [ ] At least one building can be selected via click/tap and highlighted.
 - [ ] The map supports drag/touch pan and zoom without WebGL.
 - [ ] A metadata panel displays **known** block details or explicit missing-data states.
-- [ ] Unimplemented resale, BTO, height and 3D features are not presented as available.
+- [ ] Historical resale bands are presented only where matched; the selected-block SVG extrusion is labeled illustrative and is not presented as official height or architectural geometry.
 - [ ] Map/data attribution is available.
 - [ ] The app is usable in a narrow mobile viewport.
 - [ ] No private API tokens are embedded in shipped assets.
@@ -673,6 +673,7 @@ At the start of every task:
 | 11 Oct 2026 | Half-day functional hackathon prototype; continue after the event. | Confirmed by user |
 | 11 Oct 2026 | GitHub Pages is mandatory. | Confirmed by user |
 | 11 Oct 2026 | React + TypeScript + Vite + Leaflet + OpenStreetMap raster tiles + Python ETL + GitHub Actions; no WebGL for the map. | Confirmed by user request; replaces the earlier MapLibre choice |
+| 11 Oct 2026 | Add an on-demand rotatable SVG extrusion for selected existing HDB blocks, using the source GeoJSON footprint and source maximum floor level; load only the selected region's footprint asset and keep vertical scale illustrative. | Explicit user request |
 | 11 Oct 2026 | Publish derived data as static assets; no production backend. | Architectural requirement derived from hosting choice |
 | 11 Oct 2026 | Prepare and render selected-block resale history from the five locally downloaded transaction partitions using a conservative HDB street-code to street-name crosswalk. | User request; implemented in the current working tree |
 | 11 Oct 2026 | Exact featured BTO project and Codex environment are **undecided**. | Open |

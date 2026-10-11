@@ -132,6 +132,7 @@ def load_transactions(raw_dir: Path) -> tuple[dict[str, dict[str, Any]], dict[st
                 source_row_count += 1
                 month, block, street = norm(row.get("month")), norm(row.get("block")), norm(row.get("street_name"))
                 flat_type = norm(row.get("flat_type")).replace("MULTI GENERATION", "MULTI-GENERATION")
+                storey_range = norm(row.get("storey_range"))
                 try:
                     year, month_num = int(month[:4]), int(month[5:7])
                     price = int(float(row["resale_price"]))
@@ -140,9 +141,9 @@ def load_transactions(raw_dir: Path) -> tuple[dict[str, dict[str, Any]], dict[st
                     skipped_reasons["invalid month or resale price"] += 1
                     continue
                 if (len(month) != 7 or month[4] != "-" or not 1 <= month_num <= 12 or not block or not street
-                        or flat_type not in FLAT_TYPES or price < 0):
+                        or flat_type not in FLAT_TYPES or price < 0 or not re.fullmatch(r"\d{2} TO \d{2}", storey_range)):
                     skipped_rows += 1
-                    skipped_reasons["missing identifier, unsupported flat type, invalid month, or negative price"] += 1
+                    skipped_reasons["missing identifier, unsupported flat type, invalid month/price, or missing/invalid storey range"] += 1
                     continue
                 included_months.append(month)
                 key = address_key(block, street)
@@ -151,10 +152,12 @@ def load_transactions(raw_dir: Path) -> tuple[dict[str, dict[str, Any]], dict[st
                     "streetName": street,
                     "periods": defaultdict(list),
                     "flatPeriods": defaultdict(lambda: defaultdict(list)),
+                    "floorBandPeriods": defaultdict(lambda: defaultdict(list)),
                     "transactionCount": 0,
                 })
                 group["periods"][str(year)].append(price)
                 group["flatPeriods"][flat_type][str(year)].append(price)
+                group["floorBandPeriods"][storey_range][str(year)].append(price)
                 group["transactionCount"] += 1
     return groups, {
         "sourceRowCount": source_row_count,
@@ -183,6 +186,14 @@ def prepare(raw_dir: Path, hdb_path: Path, under_construction_path: Path, proper
             "streetName": group["streetName"],
             "transactionCount": group["transactionCount"],
             "overallHistory": history(group["periods"]),
+            "floorBandHistory": {
+                band: {
+                    "transactionCount": sum(len(prices) for prices in periods.values()),
+                    "medianSgd": int(round(median([price for prices in periods.values() for price in prices]))),
+                    "history": history(periods),
+                }
+                for band, periods in sorted(group["floorBandPeriods"].items())
+            },
             "flatTypeHistory": {
                 flat_type: history(periods)
                 for flat_type, periods in sorted(group["flatPeriods"].items())
@@ -196,7 +207,7 @@ def prepare(raw_dir: Path, hdb_path: Path, under_construction_path: Path, proper
     ]
     all_years = [point[0] for group in groups.values() for point in history(group["periods"])]
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "metadata": {
             "source": {
                 "name": "HDB resale flat prices, 1990 onwards",
@@ -208,9 +219,9 @@ def prepare(raw_dir: Path, hdb_path: Path, under_construction_path: Path, proper
                 "sourceDateCoverage": f"{min(all_years)} to {max(all_years)}" if all_years else None,
                 "sourceMonthCoverage": row_counts["sourceMonthCoverage"],
                 "dateBasis": "Approval date for 1990–2012-02; registration date for 2012-03 onwards, following source dataset partitions.",
-                "aggregation": "Annual median transaction price and count by exact normalized block + street name; repeated independently for each flat type. Half-dollar medians are rounded to the nearest whole SGD. These are historical transaction observations, not current-value estimates.",
+                "aggregation": "Annual median transaction price and count by exact normalized block + street name; repeated independently for each flat type and source storey_range band. Each storey-range band also includes an all-time median and count. Half-dollar medians are rounded to the nearest whole SGD. Source storey ranges may overlap and do not identify an exact floor. These are historical transaction observations, not current-value estimates.",
                 "sourceFiles": row_counts["sourceFiles"],
-                "sourceFields": ["month", "town", "flat_type", "block", "street_name", "resale_price"],
+                "sourceFields": ["month", "town", "flat_type", "block", "street_name", "storey_range", "resale_price"],
             },
             "streetCodeCrosswalk": {
                 "propertyInformationSource": PROPERTY_URL,
