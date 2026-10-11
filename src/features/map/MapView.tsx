@@ -1,14 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
 import { Compass, Minus, Plus, RotateCw } from 'lucide-react'
 import { AttributionControl, Map as MapLibreMapInstance, type Map as MapLibreMap } from 'maplibre-gl'
+import { BuildingLayer } from './BuildingLayer'
+import type { BuildingLayerState, BuildingMetadata } from '../buildings/types'
 
 const INITIAL_CENTER: [number, number] = [103.8198, 1.3521]
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/bright'
 
-export function MapView() {
+type MapViewProps = {
+  buildingLayerState: BuildingLayerState
+  onBuildingLayerState: (state: BuildingLayerState) => void
+  onBuildingSelected: (building: BuildingMetadata | null) => void
+}
+
+export function MapView({ buildingLayerState, onBuildingLayerState, onBuildingSelected }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
+  const buildingLayerRef = useRef<BuildingLayer | null>(null)
+  const layerStateCallbackRef = useRef(onBuildingLayerState)
+  const selectionCallbackRef = useRef(onBuildingSelected)
   const [mapStatus, setMapStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+
+  layerStateCallbackRef.current = onBuildingLayerState
+  selectionCallbackRef.current = onBuildingSelected
 
   useEffect(() => {
     const container = mapContainerRef.current
@@ -35,12 +49,31 @@ export function MapView() {
     )
 
     mapRef.current = map
-    map.once('load', () => setMapStatus('ready'))
+    map.once('load', () => {
+      setMapStatus('ready')
+      const buildingLayer = new BuildingLayer(
+        map,
+        (building) => selectionCallbackRef.current(building),
+        (state) => layerStateCallbackRef.current(state),
+      )
+      buildingLayerRef.current = buildingLayer
+      void buildingLayer.load()
+    })
     map.once('error', () => {
-      if (!map.isStyleLoaded()) setMapStatus('error')
+      if (!map.isStyleLoaded()) {
+        setMapStatus('error')
+        layerStateCallbackRef.current({
+          status: 'error',
+          message: 'The map style could not load, so HDB footprints cannot be shown. Check the connection or try another browser.',
+          featureCount: 0,
+          skippedFeatureCount: 0,
+        })
+      }
     })
 
     return () => {
+      buildingLayerRef.current?.dispose()
+      buildingLayerRef.current = null
       map.remove()
       mapRef.current = null
     }
@@ -58,12 +91,20 @@ export function MapView() {
   }
   const resetOrientation = () => mapRef.current?.easeTo({ bearing: 0, pitch: 0, duration: 500 })
 
+  const statusMessage =
+    mapStatus === 'loading'
+      ? 'Loading Singapore map…'
+      : mapStatus === 'error'
+        ? 'Map style could not load. Check your connection or try another browser.'
+        : buildingLayerState.status === 'ready'
+          ? null
+          : buildingLayerState.message
+
   return (
     <div className="map-root absolute inset-0" id="map-controls">
       <div className="map-canvas absolute inset-0" ref={mapContainerRef} aria-label="Interactive map centered on Singapore" />
-      {mapStatus === 'loading' && <div className="map-loading" role="status">Loading Singapore map…</div>}
-      {mapStatus === 'error' && <div className="map-loading map-error" role="status">Map could not load. Check your connection or try another browser.</div>}
-      <div className="map-control-stack absolute right-5 top-5 z-10 flex flex-col gap-2" aria-label="Map controls">
+      {statusMessage && <div className="map-loading" role="status">{statusMessage}</div>}
+      <div className="map-control-stack absolute right-5 top-5 z-10 flex flex-col gap-2" role="group" aria-label="Map controls">
         <div className="map-control-group flex flex-col overflow-hidden rounded-xl border border-[#e2e7e1] bg-white/95 shadow-[0_4px_18px_rgba(32,45,38,0.12)] backdrop-blur-md">
           <button className="map-control-button" type="button" onClick={zoomIn} aria-label="Zoom in" title="Zoom in"><Plus size={17} aria-hidden="true" /></button>
           <span className="map-control-divider" />

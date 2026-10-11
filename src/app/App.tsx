@@ -1,11 +1,22 @@
 import { useState } from 'react'
 import { ArrowUpRight, ChevronDown, Command, Search, Sparkles } from 'lucide-react'
 import { BuildingDetailsPanel } from '../features/buildings/BuildingDetailsPanel'
+import { INITIAL_BUILDING_LAYER_STATE, type BuildingLayerState, type BuildingMetadata } from '../features/buildings/types'
 import { MapView } from '../features/map/MapView'
 import { ProjectSearch } from '../features/projects/ProjectSearch'
 
 export default function App() {
   const [detailsExpanded, setDetailsExpanded] = useState(false)
+  const [selectedBuilding, setSelectedBuilding] = useState<BuildingMetadata | null>(null)
+  const [buildingLayerState, setBuildingLayerState] = useState<BuildingLayerState>(INITIAL_BUILDING_LAYER_STATE)
+
+  const mobileDetailsSummary = selectedBuilding
+    ? `Block ${selectedBuilding.blockNumber ?? '—'} selected`
+    : buildingLayerState.status === 'ready'
+      ? 'Tap a building to inspect it'
+      : buildingLayerState.status === 'loading'
+        ? 'Loading HDB footprints…'
+        : 'HDB footprint data unavailable'
 
   return (
     <div className="app-shell flex h-svh min-h-[540px] flex-col overflow-hidden bg-[#f7f8f6] text-[#222b2a]">
@@ -33,7 +44,11 @@ export default function App() {
 
       <main className="workspace relative flex min-h-0 flex-1">
         <section className="map-stage relative min-w-0 flex-1" aria-label="Map of Singapore">
-          <MapView />
+          <MapView
+            buildingLayerState={buildingLayerState}
+            onBuildingLayerState={setBuildingLayerState}
+            onBuildingSelected={setSelectedBuilding}
+          />
           <div className="map-context pointer-events-none absolute left-6 top-6 z-10">
             <div className="map-context-card rounded-xl border border-white/80 bg-white/90 px-4 py-3 shadow-[0_8px_28px_rgba(30,48,41,0.08)] backdrop-blur-md">
               <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7d8882]"><span className="size-1.5 rounded-full bg-[#769177]" /> Live map</p>
@@ -47,7 +62,7 @@ export default function App() {
         </section>
 
         <aside className="desktop-sidebar relative z-10 flex w-[364px] shrink-0 flex-col border-l border-[#e7eae5] bg-[#fbfcfa]">
-          <BuildingDetailsPanel />
+          <BuildingDetailsPanel building={selectedBuilding} dataState={buildingLayerState} />
         </aside>
 
         <section className={`mobile-details-panel ${detailsExpanded ? 'is-expanded' : ''}`} aria-label="Property details">
@@ -60,12 +75,12 @@ export default function App() {
           >
             <span className="flex items-center gap-3">
               <span className="flex size-9 items-center justify-center rounded-xl bg-[#eef2ec] text-[#58705b]"><Search size={16} aria-hidden="true" /></span>
-              <span><span className="block text-sm font-semibold text-[#29322f]">Property details</span><span className="mt-0.5 block text-[11px] text-[#828b86]">Nothing selected yet</span></span>
+              <span><span className="block text-sm font-semibold text-[#29322f]">Property details</span><span className="mt-0.5 block text-[11px] text-[#828b86]" aria-live="polite">{mobileDetailsSummary}</span></span>
             </span>
             <span className="flex size-9 items-center justify-center rounded-full text-[#66716b] transition-transform" aria-hidden="true"><ChevronDown className={detailsExpanded ? 'rotate-180' : ''} size={18} /></span>
           </button>
           <div className="mobile-panel-content" id="mobile-property-content" hidden={!detailsExpanded}>
-            <BuildingDetailsPanel compact />
+            <BuildingDetailsPanel compact building={selectedBuilding} dataState={buildingLayerState} />
             <a className="mobile-explore-link inline-flex items-center gap-1.5 text-xs font-medium text-[#4d6b57]" href="#map-controls">Explore map controls <ArrowUpRight size={13} aria-hidden="true" /></a>
           </div>
         </section>
