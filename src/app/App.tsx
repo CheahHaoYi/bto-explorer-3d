@@ -7,6 +7,7 @@ import { ProjectSearch } from '../features/projects/ProjectSearch'
 import { loadRegionDataset } from '../features/regions/data'
 import { RegionBrowser } from '../features/regions/RegionBrowser'
 import type { RegionRecord, RegionalHdbRecord } from '../features/regions/types'
+import { findBlockHistory, loadResaleHistory, type BlockPriceHistory } from '../features/prices/data'
 
 export default function App() {
   const [detailsExpanded, setDetailsExpanded] = useState(false)
@@ -18,6 +19,9 @@ export default function App() {
   const [regionError, setRegionError] = useState('')
   const [selectedRegionCode, setSelectedRegionCode] = useState<string | null>(null)
   const [selectedRegionalHdb, setSelectedRegionalHdb] = useState<{ regionCode: string; building: RegionalHdbRecord } | null>(null)
+  const [resaleHistory, setResaleHistory] = useState<BlockPriceHistory | null>(null)
+  const [resaleStatus, setResaleStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+  const [resaleError, setResaleError] = useState('')
 
   useEffect(() => {
     let active = true
@@ -33,16 +37,44 @@ export default function App() {
     return () => { active = false }
   }, [])
 
+  useEffect(() => {
+    const blockNumber = selectedBuilding?.blockNumber ?? selectedRegionalHdb?.building.blockNumber ?? null
+    const sourceStreetCode = selectedBuilding?.sourceProperties.ST_COD
+    const streetCode = selectedRegionalHdb?.building.streetCode ?? (typeof sourceStreetCode === 'string' ? sourceStreetCode : null)
+    if (!blockNumber || !streetCode) {
+      setResaleHistory(null)
+      setResaleStatus(selectedBuilding || selectedRegionalHdb ? 'ready' : 'idle')
+      setResaleError('')
+      return
+    }
+    let active = true
+    setResaleHistory(null)
+    setResaleStatus('loading')
+    setResaleError('')
+    void loadResaleHistory().then((dataset) => {
+      if (!active) return
+      setResaleHistory(findBlockHistory(dataset, streetCode, blockNumber))
+      setResaleStatus('ready')
+    }).catch((error: unknown) => {
+      if (!active) return
+      setResaleStatus('error')
+      setResaleError(error instanceof Error ? error.message : 'Could not load historical resale data.')
+    })
+    return () => { active = false }
+  }, [selectedBuilding, selectedRegionalHdb])
+
   const selectRegion = (regionCode: string | null) => {
     setSelectedRegionCode(regionCode)
     setSelectedRegionalHdb(null)
     setSelectedBuilding(null)
+    if (regionCode) setDetailsExpanded(true)
   }
 
   const selectRegionalHdb = (regionCode: string, building: RegionalHdbRecord) => {
     setSelectedRegionCode(regionCode)
     setSelectedRegionalHdb({ regionCode, building })
     setSelectedBuilding(null)
+    setDetailsExpanded(true)
   }
 
   const selectedRegion = regions.find((region) => region.code === selectedRegionCode)
@@ -107,13 +139,8 @@ export default function App() {
             }}
             onBuildingsLoaded={setAvailableBuildings}
             onRegionSelected={selectRegion}
+            onRegionalHdbSelected={selectRegionalHdb}
           />
-          <div className="map-context pointer-events-none absolute left-6 top-6 z-10">
-            <div className="map-context-card rounded-xl border border-white/80 bg-white/90 px-4 py-3 shadow-[0_8px_28px_rgba(30,48,41,0.08)] backdrop-blur-md">
-              <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7d8882]"><span className="size-1.5 rounded-full bg-[#769177]" /> Live map</p>
-              <p className="mt-1.5 text-[15px] font-semibold tracking-[-0.02em] text-[#27302d]">Singapore</p>
-            </div>
-          </div>
           <div className="map-caption pointer-events-none absolute bottom-5 left-6 z-10 hidden items-center gap-2 rounded-lg bg-white/80 px-3 py-2 text-[10px] text-[#68736d] shadow-sm backdrop-blur-sm sm:flex">
             <Sparkles size={13} strokeWidth={1.8} aria-hidden="true" />
             Explore the island at your own pace
@@ -130,7 +157,14 @@ export default function App() {
             onRegionSelected={selectRegion}
             onBuildingSelected={selectRegionalHdb}
           />
-          <BuildingDetailsPanel building={selectedBuilding} dataState={buildingLayerState} />
+          <BuildingDetailsPanel
+            building={selectedBuilding}
+            regionalBuilding={selectedRegionalHdb?.building ?? null}
+            dataState={buildingLayerState}
+            resaleHistory={resaleHistory}
+            resaleStatus={resaleStatus}
+            resaleError={resaleError}
+          />
         </aside>
 
         <section className={`mobile-details-panel ${detailsExpanded ? 'is-expanded' : ''}`} aria-label="Property details">
@@ -157,7 +191,15 @@ export default function App() {
               onRegionSelected={selectRegion}
               onBuildingSelected={selectRegionalHdb}
             />
-            <BuildingDetailsPanel compact building={selectedBuilding} dataState={buildingLayerState} />
+            <BuildingDetailsPanel
+              compact
+              building={selectedBuilding}
+              regionalBuilding={selectedRegionalHdb?.building ?? null}
+              dataState={buildingLayerState}
+              resaleHistory={resaleHistory}
+              resaleStatus={resaleStatus}
+              resaleError={resaleError}
+            />
             <a className="mobile-explore-link inline-flex items-center gap-1.5 text-xs font-medium text-[#4d6b57]" href="#map-controls">Explore map controls <ArrowUpRight size={13} aria-hidden="true" /></a>
           </div>
         </section>

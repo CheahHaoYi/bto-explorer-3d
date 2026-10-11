@@ -11,16 +11,16 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import math
 import re
 from collections import defaultdict
 from pathlib import Path
-from statistics import mean, median
+from statistics import median
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RAW = ROOT / "data/raw"
 DEFAULT_HDB = DEFAULT_RAW / "HDBExistingBuilding.geojson"
+DEFAULT_UNDER_CONSTRUCTION = DEFAULT_RAW / "HDBUnderConstructionBuildings.geojson"
 DEFAULT_PROPERTIES = DEFAULT_RAW / "HDBPropertyInformation.csv"
 DEFAULT_OUTPUT = ROOT / "public/data/resale/block-history.json"
 
@@ -45,7 +45,7 @@ def address_key(block: str, street: str) -> str:
     return f"{block}|{street}"
 
 
-def load_street_code_crosswalk(hdb_path: Path, properties_path: Path) -> tuple[dict[tuple[str, str], str], dict[str, int]]:
+def load_street_code_crosswalk(hdb_path: Path, under_construction_path: Path, properties_path: Path) -> tuple[dict[tuple[str, str], str], dict[str, int]]:
     with properties_path.open(encoding="utf-8-sig", newline="") as handle:
         property_rows = list(csv.DictReader(handle))
     streets_by_block: dict[str, set[str]] = defaultdict(set)
@@ -58,6 +58,7 @@ def load_street_code_crosswalk(hdb_path: Path, properties_path: Path) -> tuple[d
     if not isinstance(source, dict) or source.get("type") != "FeatureCollection":
         raise ValueError("HDB existing-building input must be a GeoJSON FeatureCollection.")
     blocks_by_code: dict[str, set[str]] = defaultdict(set)
+    under_construction_pairs: set[tuple[str, str]] = set()
     for feature in source.get("features", []):
         props = feature.get("properties") if isinstance(feature, dict) else None
         if not isinstance(props, dict):
@@ -66,13 +67,26 @@ def load_street_code_crosswalk(hdb_path: Path, properties_path: Path) -> tuple[d
         if code and block:
             blocks_by_code[code].add(block)
 
+    under_construction = json.loads(under_construction_path.read_text(encoding="utf-8"))
+    if not isinstance(under_construction, dict) or under_construction.get("type") != "FeatureCollection":
+        raise ValueError("Under-construction HDB input must be a GeoJSON FeatureCollection.")
+    for feature in under_construction.get("features", []):
+        props = feature.get("properties") if isinstance(feature, dict) else None
+        if not isinstance(props, dict):
+            continue
+        code, block = norm(props.get("ST_COD")), norm(props.get("BLK_NO"))
+        if code and block:
+            under_construction_pairs.add((code, block))
+
     crosswalk: dict[tuple[str, str], str] = {}
+    mapped_under_construction: set[tuple[str, str]] = set()
     unique_code_count = 0
     unresolved_code_count = 0
     for code, blocks in blocks_by_code.items():
-        # Every block must have exactly one property-information street.
+        # Ambiguous block numbers are acceptable only if all blocks still have
+        # one identical street in common; missing property rows remain unresolved.
         street_sets = [streets_by_block.get(block, set()) for block in blocks]
-        if any(len(streets) != 1 for streets in street_sets):
+        if any(not streets for streets in street_sets):
             unresolved_code_count += 1
             continue
         common = set.intersection(*(set(streets) for streets in street_sets))
@@ -83,10 +97,16 @@ def load_street_code_crosswalk(hdb_path: Path, properties_path: Path) -> tuple[d
         unique_code_count += 1
         for block in blocks:
             crosswalk[(code, block)] = street
+        for candidate_code, block in under_construction_pairs:
+            if candidate_code == code and street in streets_by_block.get(block, set()):
+                crosswalk[(code, block)] = street
+                mapped_under_construction.add((code, block))
     return crosswalk, {
         "existingBuildingStreetCodes": len(blocks_by_code),
         "resolvedStreetCodes": unique_code_count,
         "unresolvedStreetCodes": unresolved_code_count,
+        "underConstructionBuildingBlockPairs": len(under_construction_pairs),
+        "mappedUnderConstructionBuildingBlockPairs": len(mapped_under_construction),
         "mappedBuildingBlockPairs": len(crosswalk),
     }
 
@@ -94,6 +114,7 @@ def load_street_code_crosswalk(hdb_path: Path, properties_path: Path) -> tuple[d
 def load_transactions(raw_dir: Path) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     groups: dict[str, dict[str, Any]] = {}
     skipped_rows = 0
+    skipped_reasons: dict[str, int] = defaultdict(int)
     source_row_count = 0
     source_files: list[str] = []
     for filename in DATASET_FILES:
@@ -109,16 +130,18 @@ def load_transactions(raw_dir: Path) -> tuple[dict[str, dict[str, Any]], dict[st
             for row in reader:
                 source_row_count += 1
                 month, block, street = norm(row.get("month")), norm(row.get("block")), norm(row.get("street_name"))
-                flat_type = norm(row.get("flat_type"))
+                flat_type = norm(row.get("flat_type")).replace("MULTI GENERATION", "MULTI-GENERATION")
                 try:
                     year, month_num = int(month[:4]), int(month[5:7])
                     price = int(float(row["resale_price"]))
                 except (ValueError, TypeError, KeyError):
                     skipped_rows += 1
+                    skipped_reasons["invalid month or resale price"] += 1
                     continue
                 if (len(month) != 7 or month[4] != "-" or not 1 <= month_num <= 12 or not block or not street
                         or flat_type not in FLAT_TYPES or price < 0):
                     skipped_rows += 1
+                    skipped_reasons["missing identifier, unsupported flat type, invalid month, or negative price"] += 1
                     continue
                 key = address_key(block, street)
                 group = groups.setdefault(key, {
@@ -135,26 +158,19 @@ def load_transactions(raw_dir: Path) -> tuple[dict[str, dict[str, Any]], dict[st
         "sourceRowCount": source_row_count,
         "includedTransactionCount": sum(group["transactionCount"] for group in groups.values()),
         "skippedInvalidRowCount": skipped_rows,
+        "skippedReasons": dict(skipped_reasons),
         "sourceFiles": source_files,
     }
 
 
-def stats(values: list[int]) -> dict[str, int | float]:
-    return {
-        "count": len(values),
-        "medianSgd": median(values),
-        "meanSgd": round(mean(values), 2),
-        "minSgd": min(values),
-        "maxSgd": max(values),
-    }
+def history(periods: dict[str, list[int]]) -> list[list[int]]:
+    # Compact tuple layout keeps the static browser asset small:
+    # [year, median SGD, transaction count].
+    return [[int(year), int(round(median(values))), len(values)] for year, values in sorted(periods.items())]
 
 
-def history(periods: dict[str, list[int]]) -> list[dict[str, Any]]:
-    return [{"period": year, **stats(values)} for year, values in sorted(periods.items())]
-
-
-def prepare(raw_dir: Path, hdb_path: Path, properties_path: Path) -> dict[str, Any]:
-    crosswalk, crosswalk_counts = load_street_code_crosswalk(hdb_path, properties_path)
+def prepare(raw_dir: Path, hdb_path: Path, under_construction_path: Path, properties_path: Path) -> dict[str, Any]:
+    crosswalk, crosswalk_counts = load_street_code_crosswalk(hdb_path, under_construction_path, properties_path)
     groups, row_counts = load_transactions(raw_dir)
     addresses = []
     for key, group in sorted(groups.items()):
@@ -175,7 +191,7 @@ def prepare(raw_dir: Path, hdb_path: Path, properties_path: Path) -> dict[str, A
         for (code, block), street in sorted(crosswalk.items())
         if address_key(block, street) in address_keys
     ]
-    all_years = [point["period"] for group in groups.values() for point in history(group["periods"])]
+    all_years = [point[0] for group in groups.values() for point in history(group["periods"])]
     return {
         "schemaVersion": 1,
         "metadata": {
@@ -188,15 +204,16 @@ def prepare(raw_dir: Path, hdb_path: Path, properties_path: Path) -> dict[str, A
                 "priceField": "resale_price",
                 "sourceDateCoverage": f"{min(all_years)} to {max(all_years)}" if all_years else None,
                 "dateBasis": "Approval date for 1990–2012-02; registration date for 2012-03 onwards, following source dataset partitions.",
-                "aggregation": "Annual median, mean, minimum, maximum, and transaction count by exact normalized block + street name; repeated independently for each flat type. These are historical transaction observations, not current-value estimates.",
+                "aggregation": "Annual median transaction price and count by exact normalized block + street name; repeated independently for each flat type. Half-dollar medians are rounded to the nearest whole SGD. These are historical transaction observations, not current-value estimates.",
                 "sourceFiles": row_counts["sourceFiles"],
                 "sourceFields": ["month", "town", "flat_type", "block", "street_name", "resale_price"],
             },
             "streetCodeCrosswalk": {
                 "propertyInformationSource": PROPERTY_URL,
                 "hdbFootprintSource": HDB_URL,
+                "underConstructionFootprintSource": "https://data.gov.sg/datasets/d_e4aaf26891bfe398666f7a96fe81a972/view",
                 "retrievedAt": None,
-                "method": "A source street code is linked only when every existing-building block carrying that code is present under exactly one identical street name in HDB Property Information. Street codes with missing or ambiguous block-to-street records are omitted.",
+                "method": "A source street code is linked only when every existing-building block carrying that code has one identical street name in common among its HDB Property Information matches. Codes with missing rows or multiple common street candidates are omitted.",
                 **crosswalk_counts,
                 "matchedBlockStreetCodePairsWithTransactions": len(matched),
             },
@@ -212,11 +229,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-dir", type=Path, default=DEFAULT_RAW)
     parser.add_argument("--hdb-input", type=Path, default=DEFAULT_HDB)
+    parser.add_argument("--under-construction-input", type=Path, default=DEFAULT_UNDER_CONSTRUCTION)
     parser.add_argument("--properties-input", type=Path, default=DEFAULT_PROPERTIES)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
     try:
-        payload = prepare(args.raw_dir, args.hdb_input, args.properties_input)
+        payload = prepare(args.raw_dir, args.hdb_input, args.under_construction_input, args.properties_input)
     except (OSError, json.JSONDecodeError, ValueError) as error:
         parser.error(str(error))
     serialized = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False)

@@ -216,8 +216,6 @@ export class BuildingLayer {
         },
       }).addTo(this.map)
 
-      const bounds = this.geoJsonLayer.getBounds()
-      if (bounds.isValid()) this.map.fitBounds(bounds.pad(0.12), { maxZoom: 16, animate: false })
       this.onBuildingsLoaded(parsed.collection.features.map(toBuildingMetadata))
       const skipped = parsed.skippedFeatureCount
       this.onState({

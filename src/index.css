@@ -83,6 +83,64 @@ button {
   transition: color 140ms ease, background-color 140ms ease;
 }
 
+.map-view-button {
+  display: inline-flex;
+  height: 40px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #e2e7e1;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 0 12px;
+  color: #4f6255;
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: 0 4px 18px rgba(32, 45, 38, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.map-view-button:hover,
+.map-view-button[aria-expanded="true"] {
+  background: #f2f6f0;
+  color: #344f3c;
+}
+
+.map-view-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.map-view-button:focus-visible,
+.map-region-option:focus-visible {
+  outline: 2px solid #476b52;
+  outline-offset: 2px;
+}
+
+.map-region-option {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  gap: 9px;
+  border-radius: 8px;
+  padding: 0 9px;
+  color: #39463e;
+  font-size: 11px;
+  text-align: left;
+}
+
+.map-region-option:hover {
+  background: #f2f6f0;
+}
+
+.map-region-color {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(66, 91, 71, 0.35);
+  border-radius: 3px;
+}
+
 .map-control-button:hover {
   background-color: #f3f6f1;
   color: #3b5a46;
@@ -137,6 +195,29 @@ button {
   line-height: 1.55;
   text-align: center;
   box-shadow: 0 5px 20px rgba(39, 56, 44, 0.09);
+}
+
+.map-region-status {
+  position: absolute;
+  z-index: 450;
+  bottom: 62px;
+  left: 50%;
+  max-width: min(480px, calc(100% - 32px));
+  transform: translateX(-50%);
+  border: 1px solid rgba(229, 234, 227, 0.94);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 8px 14px;
+  color: #596b5d;
+  font-size: 11px;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(39, 56, 44, 0.1);
+  backdrop-filter: blur(8px);
+}
+
+.map-region-status.is-error {
+  border-color: rgba(222, 183, 166, 0.95);
+  color: #8a4937;
 }
 
 .map-tile-warning {
@@ -197,8 +278,11 @@ button {
 }
 
 .map-legend-region {
-  width: 17px;
-  border-top: 2px dashed #596f5e;
+  width: 13px;
+  height: 13px;
+  border: 1px solid #738b78;
+  border-radius: 3px;
+  background: rgba(155, 185, 163, 0.22);
 }
 
 .map-legend-selected {

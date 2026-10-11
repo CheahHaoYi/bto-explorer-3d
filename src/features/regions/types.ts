@@ -15,6 +15,7 @@ export interface RegionRecord {
   geometry: MultiPolygon
   buildingCount: number
   buildings: RegionalHdbRecord[]
+  footprintsAsset: string
 }
 
 export interface RegionDataset {

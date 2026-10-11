@@ -34,7 +34,9 @@ The collection may include a top-level `metadata` object recording the source, C
 
 ## Region HDB index
 
-The browser reads `public/data/regions/hdb-by-region.json` via `import.meta.env.BASE_URL`. It is a versioned JSON object with `schemaVersion: 1`, provenance metadata, and a `regions` array. Each region has a stable `code`, source `name`, source MultiPolygon geometry, `buildingCount`, and HDB building list.
+The browser reads `public/data/regions/hdb-by-region.json` via `import.meta.env.BASE_URL`. It is a versioned JSON object with `schemaVersion: 1`, provenance metadata, and a `regions` array. Each region has a stable `code`, source `name`, source MultiPolygon geometry, `buildingCount`, an HDB block list, and a fixed `footprintsAsset` path. `footprintsAsset` must match the allow-listed file for that region code.
+
+On region selection, the browser fetches that asset from `public/data/regions/buildings/`. It is a GeoJSON FeatureCollection with source Polygon/MultiPolygon geometry, stable `id` and `building_id`, block/postal/street fields, and representative point coordinates. Collection region code, feature count, IDs, polygon rings, and list properties are checked at runtime before drawing. Footprint geometry is retained without simplification, reprojection, repair, or imputation. The five region collections are requested independently so only the active region's polygons are loaded.
 
 Each HDB list item contains a stable source-derived ID, block number, postal code, street code when present, and a WGS 84 representative point. It does not contain or replace the source footprint. `buildingCount` must equal the list length; IDs must be unique across the dataset; per-region counts in metadata must match each list; coordinates and MultiPolygon rings are validated at runtime.
 
@@ -57,6 +59,17 @@ Required validation before rendering:
 5. `flatTypes` contains only the declared HDB flat types. A missing type means unavailable/not included, not zero transactions.
 
 The price UI receives a validated `ResalePriceSummary` and a selected flat type (or `ALL`). It should show sample count and covered period alongside medians and label the result as historical/derived.
+
+## Block resale history JSON
+
+The browser lazily reads `public/data/resale/block-history.json` through `import.meta.env.BASE_URL` when an HDB block is selected. It is a compact versioned document with `schemaVersion: 1`, `metadata`, `addresses`, and `buildingMatches`.
+
+- `metadata.source` records the HDB resale source URL, fields, date coverage, retrieval-date availability, source date basis, and annual aggregation method. `metadata.streetCodeCrosswalk` records the property-information and HDB-footprint sources, exact matching rule, and match counts.
+- `addresses[]` is keyed by the exact normalized `blockNumber|streetName`. `overallHistory` and each `flatTypeHistory` value contain ordered compact points `[year, medianSgd, transactionCount]`. Median amounts are rounded to whole SGD. The per-year counts in overall and flat-type histories must each sum to the address transaction count.
+- `buildingMatches[]` joins `streetCode|blockNumber` from HDB building footprints to an address key. A street code is used only if all existing HDB blocks with that code have one common street-name candidate in HDB Property Information; under-construction blocks are included only when that same street code resolves and their block has that exact street in property information. Unresolved codes are omitted.
+- Runtime ingestion validates the schema version, provenance, unique address/building keys, canonical address keys, known flat types, ordered annual points, non-negative prices, positive counts, and matching transaction totals. A missing building match is unavailable, not zero transactions.
+
+This asset describes past sales. It must not be interpreted as a present-value estimate or a prediction.
 
 ## Component boundaries
 

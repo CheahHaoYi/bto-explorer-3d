@@ -2,6 +2,13 @@ import type { MultiPolygon } from 'geojson'
 import type { RegionDataset, RegionRecord, RegionalHdbRecord } from './types'
 
 const REGION_DATA_URL = `${import.meta.env.BASE_URL}data/regions/hdb-by-region.json`
+const FOOTPRINT_ASSET_BY_REGION: Record<string, string> = {
+  CR: 'buildings/cr.geojson',
+  ER: 'buildings/er.geojson',
+  NR: 'buildings/nr.geojson',
+  NER: 'buildings/ner.geojson',
+  WR: 'buildings/wr.geojson',
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -71,7 +78,9 @@ export function parseRegionDataset(payload: unknown): RegionDataset {
         !isRecord(rawRegion.geometry) || rawRegion.geometry.type !== 'MultiPolygon' ||
         !isMultiPolygonCoordinates(rawRegion.geometry.coordinates) ||
         !Number.isInteger(rawRegion.buildingCount) || (rawRegion.buildingCount as number) < 0 ||
-        !Array.isArray(rawRegion.buildings) || seenRegionCodes.has(rawRegion.code)) {
+        !Array.isArray(rawRegion.buildings) ||
+        rawRegion.footprintsAsset !== FOOTPRINT_ASSET_BY_REGION[rawRegion.code] ||
+        seenRegionCodes.has(rawRegion.code)) {
       throw new Error('Region HDB data contains an invalid or duplicate region.')
     }
     seenRegionCodes.add(rawRegion.code)
@@ -93,6 +102,7 @@ export function parseRegionDataset(payload: unknown): RegionDataset {
       geometry: { type: 'MultiPolygon', coordinates: rawRegion.geometry.coordinates } as MultiPolygon,
       buildingCount: rawRegion.buildingCount as number,
       buildings,
+      footprintsAsset: rawRegion.footprintsAsset,
     })
   }
 
@@ -175,4 +185,48 @@ export async function loadRegionDataset(): Promise<RegionDataset> {
     throw new Error('Region HDB data is not valid JSON.')
   }
   return parseRegionDataset(payload)
+}
+
+export async function loadRegionFootprints(region: RegionRecord, signal: AbortSignal): Promise<GeoJSON.FeatureCollection> {
+  const response = await fetch(`${import.meta.env.BASE_URL}data/regions/${region.footprintsAsset}`, { signal })
+  if (!response.ok) throw new Error(`${region.name} footprint data returned HTTP ${response.status}.`)
+  let payload: unknown
+  try {
+    payload = await response.json()
+  } catch {
+    throw new Error(`${region.name} footprint data is not valid JSON.`)
+  }
+  if (!isRecord(payload) || payload.type !== 'FeatureCollection' || !Array.isArray(payload.features) ||
+      !isRecord(payload.metadata) || payload.metadata.regionCode !== region.code ||
+      payload.metadata.featureCount !== region.buildingCount || payload.features.length !== region.buildingCount ||
+      typeof payload.metadata.source !== 'string' || typeof payload.metadata.sourceUrl !== 'string' ||
+      typeof payload.metadata.regionSource !== 'string' || typeof payload.metadata.regionSourceUrl !== 'string' ||
+      typeof payload.metadata.license !== 'string' || typeof payload.metadata.crsAssumption !== 'string' ||
+      typeof payload.metadata.geometryTransformation !== 'string') {
+    throw new Error(`${region.name} footprint data does not match the regional index.`)
+  }
+  const knownBuildings = new Map(region.buildings.map((building) => [building.buildingId, building]))
+  const seen = new Set<string>()
+  const features: GeoJSON.Feature[] = []
+  for (const feature of payload.features) {
+    if (!isRecord(feature) || feature.type !== 'Feature' || typeof feature.id !== 'string' ||
+        !isRecord(feature.properties) || feature.properties.building_id !== feature.id ||
+        !knownBuildings.has(feature.id) || seen.has(feature.id) || !isRecord(feature.geometry)) {
+      throw new Error(`${region.name} footprint data contains an invalid or duplicate HDB feature.`)
+    }
+    const geometry = feature.geometry
+    const validGeometry = (geometry.type === 'Polygon' && isPolygonCoordinates(geometry.coordinates)) ||
+      (geometry.type === 'MultiPolygon' && isMultiPolygonCoordinates(geometry.coordinates))
+    if (!validGeometry) throw new Error(`${region.name} footprint data contains an invalid HDB geometry.`)
+    const indexRecord = knownBuildings.get(feature.id)!
+    if (feature.properties.block_number !== indexRecord.blockNumber ||
+        feature.properties.postal_code !== indexRecord.postalCode ||
+        feature.properties.street_code !== indexRecord.streetCode ||
+        feature.properties.longitude !== indexRecord.longitude || feature.properties.latitude !== indexRecord.latitude) {
+      throw new Error(`${region.name} footprint properties do not match the regional HDB list.`)
+    }
+    seen.add(feature.id)
+    features.push(feature as unknown as GeoJSON.Feature)
+  }
+  return { type: 'FeatureCollection', features }
 }

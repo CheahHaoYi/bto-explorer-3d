@@ -20,7 +20,7 @@ npm run preview
 
 The production build is a static site in `dist/`. Leaflet loads OpenStreetMap raster tiles over the network and shows the required attribution. HDB footprints and the region/HDB index are bundled as static assets; local outlines remain available if the tile service is unavailable.
 
-Drag to pan, scroll or pinch to zoom, use the zoom buttons, and select **Show all HDB footprints** to return to the prepared data extent. Choose an under-construction block from the header dropdown or click a footprint to inspect its source identifiers. In the region panel, choose one of the five URA regions to see and search existing HDB blocks by block number or postal code. Select a listed block to zoom to its representative point. Region assignment is derived from each valid HDB footprint's representative point; the region boundaries are indicative planning boundaries. The source contains building blocks, not named BTO projects or project boundaries. This MVP is a flat 2D map with no 3D extrusion or building-height claim.
+Drag to pan, scroll or pinch to zoom, and use the zoom buttons. The initial map shows all five URA regions with softly tinted fills. Click a region on the map or choose it in the region panel to highlight it and load its existing HDB footprints; click a footprint or a row in the searchable block list to open its details. Use **Whole map** to return to the Singapore overview or **Select region** to switch regions. **Show all HDB footprints** fits the current overview or active region. Choose an under-construction block from the header dropdown or click one of its footprints to inspect its source identifiers. Region membership is derived from each valid existing-HDB footprint's representative point; the region boundaries are indicative planning boundaries. The source contains building blocks, not named BTO projects or project boundaries. This MVP is a flat 2D map with no 3D extrusion or building-height claim.
 
 ## Prepare the HDB demo data
 
@@ -48,7 +48,7 @@ Prepare the region and existing-HDB index with:
 .venv/bin/python scripts/prepare_region_hdb_index.py
 ```
 
-It reads `data/raw/HDBExistingBuilding.geojson` and `data/raw/MasterPlan2025RegionBoundaryNoSea.geojson`, and writes the compact browser index to `public/data/regions/hdb-by-region.json`.
+It reads `data/raw/HDBExistingBuilding.geojson` and `data/raw/MasterPlan2025RegionBoundaryNoSea.geojson`, and writes the browser index to `public/data/regions/hdb-by-region.json` plus one lazy-loaded footprint GeoJSON per region under `public/data/regions/buildings/`.
 
 ## Project structure
 

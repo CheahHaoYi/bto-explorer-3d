@@ -3,7 +3,7 @@
 > **Canonical project context for ChatGPT, Codex, and collaborators**  
 > **Version:** 1.0  
 > **Last updated:** 11 October 2026 (Asia/Singapore)  
-> **Status:** 2D Leaflet MVP with regional HDB browsing implemented in the working tree; build verified, browser interaction review pending
+> **Status:** 2D Leaflet MVP with regional HDB browsing and selected-block historical resale history implemented in the working tree; build verified, browser interaction review pending
 > **Owner:** Project creator  
 > **Repository name:** `bto-explorer-3d`  
 > **Deployment target:** `https://<github-username>.github.io/bto-explorer-3d/`
@@ -149,7 +149,7 @@ Build a focused, trustworthy, approachable interface to connect **place → buil
 | FR-05 | P0 | Static Vite build on GitHub Pages | Deployed URL loads JS/CSS/GeoJSON and works on page refresh. |
 | FR-06 | P1 | Match HDB Property Information to building footprint | Documented join, match coverage and explicit unmatched records. |
 | FR-07 | P1 | Metadata: verified block/street/max floor/year/units, as available | Each field labeled as data-backed, estimated, or unavailable. |
-| FR-08 | P1 | Last-12-month resale data summary and flat-type breakdown | Median, count, period, geography, source displayed. |
+| FR-08 | P1 | Show a selected block's historical resale transaction prices and flat-type breakdown where a verified address join exists | Annual medians and counts, date coverage/basis, source, and historical-not-valuation disclosure displayed; ambiguous/unmatched addresses remain unavailable. |
 | FR-09 | P1 | Client-side search within processed demo dataset | Search by known IDs/street/postcode when available; fly-to selection. |
 | FR-10 | P1 | Featured BTO marker and detail panel | Only appears after verified coordinates/project config are supplied. |
 | FR-11 | P0 | Responsive controls on desktop and mobile | Core selection/navigation possible without hover. |
@@ -674,6 +674,7 @@ At the start of every task:
 | 11 Oct 2026 | GitHub Pages is mandatory. | Confirmed by user |
 | 11 Oct 2026 | React + TypeScript + Vite + Leaflet + OpenStreetMap raster tiles + Python ETL + GitHub Actions; no WebGL for the map. | Confirmed by user request; replaces the earlier MapLibre choice |
 | 11 Oct 2026 | Publish derived data as static assets; no production backend. | Architectural requirement derived from hosting choice |
+| 11 Oct 2026 | Prepare and render selected-block resale history from the five locally downloaded transaction partitions using a conservative HDB street-code to street-name crosswalk. | User request; implemented in the current working tree |
 | 11 Oct 2026 | Exact featured BTO project and Codex environment are **undecided**. | Open |
 
 ---
@@ -697,4 +698,4 @@ At the start of every task:
 ---
 
 **End of PRD v1.0.**  
-**Next action:** Keep the map MVP static and 2D. Manually verify region selection, HDB list filtering/pagination, list-to-map location, mobile layout, and GitHub Pages asset paths. Do not start resale analytics, project-location claims, or 3D work without a later explicit request.
+**Next action:** Keep the map MVP static and 2D. Manually verify block selection and resale-history loading, region selection, HDB list filtering/pagination, list-to-map location, mobile layout, and GitHub Pages asset paths. Current resale history is descriptive only; do not add present-value estimates without a separately approved, validated method.

@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_HDB_INPUT = ROOT / "data/raw/HDBExistingBuilding.geojson"
 DEFAULT_REGION_INPUT = ROOT / "data/raw/MasterPlan2025RegionBoundaryNoSea.geojson"
 DEFAULT_OUTPUT = ROOT / "public/data/regions/hdb-by-region.json"
+DEFAULT_FOOTPRINTS_DIR = ROOT / "public/data/regions/buildings"
 
 HDB_SOURCE_NAME = "HDB Existing Building — Housing & Development Board"
 HDB_SOURCE_URL = "https://data.gov.sg/datasets/d_16b157c52ed637edd6ba1232e026258d/view"
@@ -42,7 +43,7 @@ def point_is_finite(point: Any) -> bool:
     return math.isfinite(float(point.x)) and math.isfinite(float(point.y))
 
 
-def prepare(hdb_path: Path, region_path: Path) -> dict[str, Any]:
+def prepare(hdb_path: Path, region_path: Path) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     hdb_source = load_collection(hdb_path, "HDB Existing Building")
     region_source = load_collection(region_path, "Master Plan region boundary")
 
@@ -68,6 +69,7 @@ def prepare(hdb_path: Path, region_path: Path) -> dict[str, Any]:
             "geometry": mapping(geometry),
             "_shape": geometry,
             "buildings": [],
+            "footprints": [],
         }
     if not regions:
         raise ValueError("No region polygons were found.")
@@ -119,6 +121,19 @@ def prepare(hdb_path: Path, region_path: Path) -> dict[str, Any]:
             "longitude": representative_point.x,
             "latitude": representative_point.y,
         })
+        matches[0]["footprints"].append({
+            "type": "Feature",
+            "id": building_id,
+            "geometry": mapping(geometry),
+            "properties": {
+                "building_id": building_id,
+                "block_number": str(block_number).strip(),
+                "postal_code": str(postal_code).strip(),
+                "street_code": str(street_code).strip() if street_code is not None else None,
+                "longitude": representative_point.x,
+                "latitude": representative_point.y,
+            },
+        })
 
     for region in regions.values():
         region["buildings"].sort(key=lambda building: (
@@ -154,6 +169,7 @@ def prepare(hdb_path: Path, region_path: Path) -> dict[str, Any]:
     }
 
     output_regions = []
+    footprint_collections: dict[str, dict[str, Any]] = {}
     for code, region in sorted(regions.items(), key=lambda item: item[1]["name"]):
         output_regions.append({
             "code": region["code"],
@@ -161,8 +177,25 @@ def prepare(hdb_path: Path, region_path: Path) -> dict[str, Any]:
             "geometry": region["geometry"],
             "buildingCount": len(region["buildings"]),
             "buildings": region["buildings"],
+            "footprintsAsset": f"buildings/{code.lower()}.geojson",
         })
-    return {"schemaVersion": 1, "metadata": metadata, "regions": output_regions}
+        footprint_collections[code] = {
+            "type": "FeatureCollection",
+            "name": f"{region['name']} existing HDB footprints",
+            "metadata": {
+                "source": HDB_SOURCE_NAME,
+                "sourceUrl": HDB_SOURCE_URL,
+                "regionSource": REGION_SOURCE_NAME,
+                "regionSourceUrl": REGION_SOURCE_URL,
+                "license": "Singapore Open Data Licence; see source pages for current terms.",
+                "crsAssumption": "WGS 84 longitude/latitude (RFC 7946), inferred from GeoJSON coordinates; source does not declare a CRS.",
+                "geometryTransformation": "Source Polygon/MultiPolygon coordinates are retained without simplification, reprojection, repair, or imputation.",
+                "regionCode": code,
+                "featureCount": len(region["footprints"]),
+            },
+            "features": region["footprints"],
+        }
+    return {"schemaVersion": 1, "metadata": metadata, "regions": output_regions}, footprint_collections
 
 
 def main() -> int:
@@ -170,9 +203,10 @@ def main() -> int:
     parser.add_argument("--hdb-input", type=Path, default=DEFAULT_HDB_INPUT)
     parser.add_argument("--region-input", type=Path, default=DEFAULT_REGION_INPUT)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--footprints-dir", type=Path, default=DEFAULT_FOOTPRINTS_DIR)
     args = parser.parse_args()
     try:
-        prepared = prepare(args.hdb_input, args.region_input)
+        prepared, footprint_collections = prepare(args.hdb_input, args.region_input)
     except (OSError, json.JSONDecodeError, ValueError) as error:
         parser.error(str(error))
 
@@ -181,6 +215,13 @@ def main() -> int:
     temporary_path = args.output.with_suffix(args.output.suffix + ".tmp")
     temporary_path.write_text(serialized, encoding="utf-8")
     temporary_path.replace(args.output)
+    args.footprints_dir.mkdir(parents=True, exist_ok=True)
+    for code, collection in footprint_collections.items():
+        output_path = args.footprints_dir / f"{code.lower()}.geojson"
+        serialized_collection = json.dumps(collection, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        temporary_path = output_path.with_suffix(output_path.suffix + ".tmp")
+        temporary_path.write_text(serialized_collection, encoding="utf-8")
+        temporary_path.replace(output_path)
     counts = prepared["metadata"]["counts"]
     print(
         f"Prepared {counts['validAssignedHdbFeatures']:,} HDB footprints across "
@@ -188,6 +229,9 @@ def main() -> int:
         f"{counts['skippedUnassignedOrAmbiguousHdbFeatures']} unassigned/ambiguous records."
     )
     print(f"Output: {args.output} ({args.output.stat().st_size:,} bytes)")
+    for code, collection in footprint_collections.items():
+        output_path = args.footprints_dir / f"{code.lower()}.geojson"
+        print(f"Footprints: {output_path} ({output_path.stat().st_size:,} bytes; {collection['metadata']['featureCount']:,} features)")
     return 0
 
 
